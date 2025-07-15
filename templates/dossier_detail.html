@@ -2,6 +2,91 @@
 
 {% block title %}{{ dossier.naam }}{% endblock %}
 
+{% block extra_css %}
+<style>
+.walkscore-circle {
+    display: inline-block;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto;
+}
+
+.walkscore-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.walkscore-label {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 2px;
+}
+
+.text-green-600 { color: #059669 !important; }
+.text-green-500 { color: #10b981 !important; }
+.text-yellow-600 { color: #d97706 !important; }
+.text-orange-500 { color: #f97316 !important; }
+.text-red-500 { color: #ef4444 !important; }
+
+.walkscore-placeholder {
+    padding: 2rem 0;
+}
+
+/* PDOK Card Styles */
+.pdok-placeholder {
+    padding: 2rem 0;
+}
+
+.pdok-relevance-circle {
+    display: inline-block;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto;
+}
+
+.pdok-relevance-number {
+    font-size: 1.2rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.pdok-relevance-label {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 2px;
+}
+
+.pdok-relevance-number.excellent {
+    color: #198754;
+}
+
+.pdok-relevance-number.good {
+    color: #0d6efd;
+}
+
+.pdok-relevance-number.fair {
+    color: #fd7e14;
+}
+
+.pdok-relevance-number.poor {
+    color: #dc3545;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4" data-woonfunctie="{% if dossier.gebruiksdoel and 'woonfunctie' in dossier.gebruiksdoel.lower() %}true{% else %}false{% endif %}">
     <div>
@@ -329,6 +414,433 @@
         </div>
     </div>
 </div>
+
+<!-- WalkScore Card -->
+{% set walkscore = dossier.walkscore_data[0] if dossier.walkscore_data else None %}
+<div class="card mb-3" id="walkscore-card" 
+     data-postcode="{{ dossier.postcode }}" 
+     data-huisnummer="{{ bag.huisnummer if bag and bag.huisnummer else '' }}"
+     data-huisletter="{{ bag.huisletter if bag and bag.huisletter else '' }}">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-walking"></i> WalkScore
+        </h5>
+        <button id="walkscore-refresh-btn" class="btn btn-outline-primary btn-sm" type="button">
+            <i class="bi bi-arrow-clockwise"></i> Verversen
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="walkscore-loading" style="display: none;">
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">WalkScore data wordt opgehaald...</p>
+            </div>
+        </div>
+        <div id="walkscore-content">
+            {% if not walkscore and not walkscore_api_key %}
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle"></i> WalkScore API key is not configured. Vraag de beheerder om deze in te vullen bij de API-instellingen.
+            </div>
+            {% endif %}
+            {% if walkscore_error %}
+            <div class="alert alert-danger" role="alert">
+                <i class="bi bi-x-circle"></i> {{ walkscore_error }}
+            </div>
+            {% endif %}
+            {% if walkscore %}
+                <!-- WalkScore Display -->
+                <div class="walkscore-info">
+                    <h4 class="walkscore-title mb-3">
+                        <i class="bi bi-geo-alt-fill text-primary"></i>
+                        {{ walkscore.description }}
+                    </h4>
+                    
+                    <!-- Score Cards Row -->
+                    <div class="row g-3 mb-3">
+                        <!-- Walk Score Card -->
+                        <div class="col-md-4">
+                            <div class="score-card walkscore-card">
+                                <div class="score-icon">
+                                    <i class="bi bi-walking"></i>
+                                </div>
+                                <div class="score-content">
+                                    <div class="score-number {{ walkscore.walkscore | int | walkscore_color }}">
+                                        {{ walkscore.walkscore }}
+                                    </div>
+                                    <div class="score-label">Walk Score</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Transit Score Card -->
+                        {% if walkscore.transit_score %}
+                        <div class="col-md-4">
+                            <div class="score-card transit-card">
+                                <div class="score-icon">
+                                    <i class="bi bi-bus-front"></i>
+                                </div>
+                                <div class="score-content">
+                                    <div class="score-number transit-color">
+                                        {{ walkscore.transit_score }}
+                                    </div>
+                                    <div class="score-label">Transit Score</div>
+                                    {% if walkscore.transit_description %}
+                                    <div class="score-description">{{ walkscore.transit_description }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Bike Score Card -->
+                        {% if walkscore.bike_score %}
+                        <div class="col-md-4">
+                            <div class="score-card bike-card">
+                                <div class="score-icon">
+                                    <i class="bi bi-bicycle"></i>
+                                </div>
+                                <div class="score-content">
+                                    <div class="score-number bike-color">
+                                        {{ walkscore.bike_score }}
+                                    </div>
+                                    <div class="score-label">Bike Score</div>
+                                    {% if walkscore.bike_description %}
+                                    <div class="score-description">{{ walkscore.bike_description }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Additional Info -->
+                    <div class="walkscore-details">
+                        {% if walkscore.snapped_lat and walkscore.snapped_lon %}
+                        <div class="detail-item">
+                            <i class="bi bi-geo-alt text-muted"></i>
+                            <span class="detail-label">Snapped Location:</span>
+                            <span class="detail-value">{{ "%.4f"|format(walkscore.snapped_lat) }}, {{ "%.4f"|format(walkscore.snapped_lon) }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="detail-item">
+                            <i class="bi bi-clock text-muted"></i>
+                            <span class="detail-label">Last Updated:</span>
+                            <span class="detail-value">{{ walkscore.last_updated.strftime('%d-%m-%Y %H:%M') }}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="walkscore-actions">
+                    {% if walkscore.ws_link %}
+                    <a href="{{ walkscore.ws_link }}" target="_blank" class="btn btn-primary btn-sm">
+                        <i class="bi bi-box-arrow-up-right"></i> View on WalkScore
+                    </a>
+                    {% endif %}
+                    {% if walkscore.more_info_link %}
+                    <a href="{{ walkscore.more_info_link }}" target="_blank" class="btn btn-outline-info btn-sm">
+                        <i class="bi bi-info-circle"></i> More Info
+                    </a>
+                    {% endif %}
+                    {% if walkscore.help_link %}
+                    <a href="{{ walkscore.help_link }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-question-circle"></i> How it Works
+                    </a>
+                    {% endif %}
+                </div>
+                <details class="mt-3">
+                    <summary>Ruwe WalkScore API-data (JSON)</summary>
+                    <pre style="max-height:300px;overflow:auto;background:#f8f9fa;border:1px solid #eee;padding:8px;">{{ walkscore.api_response_data | tojson(indent=2) }}</pre>
+                </details>
+            {% else %}
+                <div class="text-center">
+                    <div class="walkscore-placeholder">
+                        <i class="bi bi-walking text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-2">Nog geen WalkScore data beschikbaar</p>
+                        <p class="text-muted small">Klik op verversen om WalkScore data op te halen</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- PDOK Data Card -->
+{% set pdok = dossier.pdok_data[0] if dossier.pdok_data else None %}
+<div class="card mb-3" id="pdok-card" 
+     data-postcode="{{ bag.postcode if bag and bag.postcode else dossier.postcode }}" 
+     data-huisnummer="{{ bag.huisnummer if bag and bag.huisnummer else '' }}"
+     data-huisletter="{{ bag.huisletter if bag and bag.huisletter else '' }}">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-database"></i> PDOK Data
+        </h5>
+        <button id="pdok-refresh-btn" class="btn btn-outline-primary btn-sm" type="button">
+            <i class="bi bi-arrow-clockwise"></i> Verversen
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="pdok-loading" style="display: none;">
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">PDOK data wordt opgehaald...</p>
+            </div>
+        </div>
+        <div id="pdok-content">
+            {% if pdok %}
+                <div class="row">
+                    <div class="col-md-4 text-center">
+                        <div class="pdok-relevance-circle">
+                            <div class="pdok-relevance-number {{ 'excellent' if pdok.taxatie_relevance_score >= 8 else 'good' if pdok.taxatie_relevance_score >= 6 else 'fair' if pdok.taxatie_relevance_score >= 4 else 'poor' }}">
+                                {{ pdok.taxatie_relevance_score }}/10
+                            </div>
+                            <div class="pdok-relevance-label">Relevantie</div>
+                        </div>
+                        {% if pdok.property_type_category %}
+                        <div class="mt-2">
+                            <span class="badge bg-info">{{ pdok.property_type_category | title }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-8">
+                        <h6 class="mb-2">Gedetailleerde Pandgegevens</h6>
+                        
+                        <!-- Basic Information -->
+                        {% if pdok.bouwjaar or pdok.oppervlakte or pdok.property_type %}
+                        <div class="mb-3">
+                            <h6 class="text-primary">Basis Informatie</h6>
+                            <div class="row">
+                                {% if pdok.bouwjaar %}
+                                <div class="col-6">
+                                    <small class="text-muted">Bouwjaar:</small><br>
+                                    <strong>{{ pdok.bouwjaar }}</strong>
+                                </div>
+                                {% endif %}
+                                {% if pdok.oppervlakte %}
+                                <div class="col-6">
+                                    <small class="text-muted">Oppervlakte:</small><br>
+                                    <strong>{{ pdok.oppervlakte }} m²</strong>
+                                </div>
+                                {% endif %}
+                                {% if pdok.property_type %}
+                                <div class="col-6">
+                                    <small class="text-muted">Type:</small><br>
+                                    <strong>{{ pdok.property_type }}</strong>
+                                </div>
+                                {% endif %}
+                                {% if pdok.address %}
+                                <div class="col-6">
+                                    <small class="text-muted">Adres:</small><br>
+                                    <strong>{{ pdok.address }}</strong>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Data Quality Indicators -->
+                        {% if pdok.has_basic_info or pdok.has_3d_data or pdok.has_kadastrale_data %}
+                        <div class="mb-3">
+                            <h6 class="text-primary">Data Beschikbaarheid</h6>
+                            <div class="d-flex flex-wrap gap-1">
+                                {% if pdok.has_basic_info %}
+                                <span class="badge bg-success">Basis Info</span>
+                                {% endif %}
+                                {% if pdok.has_3d_data %}
+                                <span class="badge bg-info">3D Data</span>
+                                {% endif %}
+                                {% if pdok.has_kadastrale_data %}
+                                <span class="badge bg-warning">Kadastrale</span>
+                                {% endif %}
+                                {% if pdok.has_topographic_data %}
+                                <span class="badge bg-secondary">Topografisch</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="mt-3">
+                            <small class="text-muted">Laatst bijgewerkt: {{ pdok.last_updated.strftime('%d-%m-%Y %H:%M') }}</small>
+                        </div>
+                    </div>
+                </div>
+                <details class="mt-3">
+                    <summary>Ruwe PDOK API-data (JSON)</summary>
+                    <pre style="max-height:300px;overflow:auto;background:#f8f9fa;border:1px solid #eee;padding:8px;">{{ pdok.api_response_data | tojson(indent=2) }}</pre>
+                </details>
+            {% else %}
+                <div class="text-center">
+                    <div class="pdok-placeholder">
+                        <i class="bi bi-database text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-2">Nog geen PDOK data beschikbaar</p>
+                        <p class="text-muted small">Klik op verversen om PDOK data op te halen</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- BRK Kadastrale Kaart Data Card -->
+{% set pdok_data = pdok.api_response_data | fromjson if pdok and pdok.api_response_data else {} %}
+{% set kadastrale_data = pdok_data.get('property_data', {}).get('kadastrale_data', {}) if pdok_data else {} %}
+
+<!-- Debug: Show what data is available -->
+{% if pdok and pdok.api_response_data %}
+<div class="card mb-3" style="background-color: #f8f9fa; border: 1px dashed #dee2e6;">
+    <div class="card-header">
+        <h6 class="card-title mb-0 text-muted">
+            <i class="bi bi-bug"></i> Debug: PDOK Data Structure
+        </h6>
+    </div>
+    <div class="card-body">
+        <small class="text-muted">
+            <strong>PDOK Data Keys:</strong> {{ pdok_data.keys() | list }}<br>
+            <strong>Property Data Keys:</strong> {{ pdok_data.get('property_data', {}).keys() | list }}<br>
+            <strong>Kadastrale Data Keys:</strong> {{ kadastrale_data.keys() | list }}<br>
+            <strong>Perceel ID:</strong> {{ kadastrale_data.get('perceel_id', 'NOT FOUND') }}<br>
+            <strong>Has Perceel ID:</strong> {{ 'YES' if kadastrale_data.get('perceel_id') else 'NO' }}
+        </small>
+    </div>
+</div>
+{% endif %}
+
+{% if kadastrale_data and kadastrale_data.get('perceel_id') %}
+<div class="card mb-3" id="kadastrale-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-map"></i> BRK Kadastrale Kaart
+        </h5>
+        <div class="btn-group btn-group-sm">
+            <a href="https://www.kadaster.nl/kadastralekaart" target="_blank" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-box-arrow-up-right"></i> Kadastrale Kaart
+            </a>
+            <a href="https://api.pdok.nl/kadaster/brk-kadastrale-kaart/ogc/v1/" target="_blank" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-database"></i> API Info
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6 class="text-primary mb-3">Perceelgegevens</h6>
+                {% if kadastrale_data.perceel_id %}
+                <div class="mb-2">
+                    <small class="text-muted">Perceel ID:</small><br>
+                    <strong>{{ kadastrale_data.perceel_id }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.kadastrale_gemeente %}
+                <div class="mb-2">
+                    <small class="text-muted">Kadastrale Gemeente:</small><br>
+                    <strong>{{ kadastrale_data.kadastrale_gemeente }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.sectie %}
+                <div class="mb-2">
+                    <small class="text-muted">Sectie:</small><br>
+                    <strong>{{ kadastrale_data.sectie }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.perceelnummer %}
+                <div class="mb-2">
+                    <small class="text-muted">Perceelnummer:</small><br>
+                    <strong>{{ kadastrale_data.perceelnummer }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.oppervlakte %}
+                <div class="mb-2">
+                    <small class="text-muted">Perceel Oppervlakte:</small><br>
+                    <strong>{{ "{:,.0f}".format(kadastrale_data.oppervlakte) }} m²</strong>
+                    {% if kadastrale_data.oppervlakte_hectare %}
+                    <br><small class="text-muted">({{ "{:.4f}".format(kadastrale_data.oppervlakte_hectare) }} hectare)</small>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% if kadastrale_data.status %}
+                <div class="mb-2">
+                    <small class="text-muted">Status:</small><br>
+                    <span class="badge {% if kadastrale_data.status == 'Geldig' %}bg-success{% else %}bg-warning{% endif %}">
+                        {{ kadastrale_data.status }}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-primary mb-3">Registratie & Details</h6>
+                {% if kadastrale_data.soort_grootte %}
+                <div class="mb-2">
+                    <small class="text-muted">Soort Grootte:</small><br>
+                    <strong>{{ kadastrale_data.soort_grootte }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.begin_geldigheid %}
+                <div class="mb-2">
+                    <small class="text-muted">Begin Geldigheid:</small><br>
+                    <strong>{{ kadastrale_data.begin_geldigheid[:10] }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.tijdstip_registratie %}
+                <div class="mb-2">
+                    <small class="text-muted">Registratie:</small><br>
+                    <strong>{{ kadastrale_data.tijdstip_registratie[:10] }}</strong>
+                </div>
+                {% endif %}
+                
+                <!-- Geometry Information -->
+                {% if kadastrale_data.geometry_available %}
+                <div class="mb-2">
+                    <small class="text-muted">Geometrie:</small><br>
+                    <span class="badge bg-success">Beschikbaar</span>
+                </div>
+                {% endif %}
+                
+                <!-- Data Quality -->
+                {% set data_quality = pdok_data.get('data_quality', {}).get('kadastrale_details', {}) %}
+                {% if data_quality %}
+                <h6 class="text-primary mb-3 mt-4">Data Kwaliteit</h6>
+                <div class="d-flex flex-wrap gap-1">
+                    {% if data_quality.has_parcel_id %}
+                    <span class="badge bg-success">Perceel ID</span>
+                    {% endif %}
+                    {% if data_quality.has_area %}
+                    <span class="badge bg-info">Oppervlakte</span>
+                    {% endif %}
+                    {% if data_quality.has_geometry %}
+                    <span class="badge bg-warning">Geometrie</span>
+                    {% endif %}
+                    {% if data_quality.parcel_status %}
+                    <span class="badge bg-primary">{{ data_quality.parcel_status }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- API Source Information -->
+        <div class="mt-3 pt-3 border-top">
+            <div class="row">
+                <div class="col-md-6">
+                    <small class="text-muted">
+                        <strong>Data Bron:</strong> BRK Kadastrale Kaart API<br>
+                        <strong>Laatst bijgewerkt:</strong> {{ pdok.last_updated.strftime('%d-%m-%Y %H:%M') }}
+                    </small>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small class="text-muted">
+                        <strong>API Endpoint:</strong><br>
+                        <code>api.pdok.nl/kadaster/brk-kadastrale-kaart/ogc/v1/</code>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Map Visualization Card -->
 {% if bag and bag.latitude and bag.longitude %}
@@ -942,6 +1454,157 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             wozCard.style.display = 'none';
         }
+    }
+
+    // WalkScore Data verversen
+    const walkscoreCard = document.getElementById('walkscore-card');
+    const walkscoreRefreshBtn = document.getElementById('walkscore-refresh-btn');
+    const walkscoreLoading = document.getElementById('walkscore-loading');
+    const walkscoreContent = document.getElementById('walkscore-content');
+    
+    if (walkscoreRefreshBtn && walkscoreCard && walkscoreLoading && walkscoreContent) {
+        walkscoreRefreshBtn.addEventListener('click', function() {
+            console.log('WalkScore refresh button clicked');
+            walkscoreLoading.style.display = 'block';
+            walkscoreContent.style.display = 'none';
+            
+            // Get postcode and house number from data attributes
+            const postcode = walkscoreCard.getAttribute('data-postcode');
+            let huisnummer = walkscoreCard.getAttribute('data-huisnummer');
+            const huisletter = walkscoreCard.getAttribute('data-huisletter') || '';
+            
+            // If no huisnummer from BAG data, try to extract from address
+            if (!huisnummer) {
+                const adres = bagCard ? bagCard.getAttribute('data-adres') : '';
+                if (adres) {
+                    // Extract house number from address (e.g., "Pippelingstraat 31" -> "31")
+                    const adresParts = adres.split(',')[0].split(' ');
+                    for (let part of adresParts) {
+                        // Remove common suffixes and check if it's a number
+                        const cleanPart = part.replace(/[-ABab]/g, '');
+                        if (cleanPart && !isNaN(cleanPart)) {
+                            huisnummer = cleanPart;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Debug logging
+            console.log('DEBUG WalkScore JS: walkscoreCard data attributes:', {
+                postcode: postcode,
+                huisnummer: huisnummer,
+                huisletter: huisletter
+            });
+            
+            if (!huisnummer) {
+                walkscoreLoading.style.display = 'none';
+                walkscoreContent.style.display = 'block';
+                walkscoreContent.innerHTML = '<span class="text-danger">Kon huisnummer niet bepalen uit adres</span>';
+                return;
+            }
+            
+            const dossierId = {{ dossier.id }};
+            
+            const requestData = { 
+                postcode: postcode, 
+                huisnummer: huisnummer, 
+                huisletter: huisletter, 
+                dossier_id: dossierId 
+            };
+            
+            console.log('DEBUG WalkScore JS: Sending request data:', requestData);
+            
+            fetch('/api/walkscore_lookup_and_save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData)
+            })
+            .then(resp => {
+                console.log('WalkScore response status:', resp.status);
+                return resp.json();
+            })
+            .then(data => {
+                console.log('WalkScore response data:', data);
+                walkscoreLoading.style.display = 'none';
+                walkscoreContent.style.display = 'block';
+                if (data.success) {
+                    // Reload page to show updated data
+                    location.reload();
+                } else {
+                    walkscoreContent.innerHTML = '<span class="text-danger">' + (data.error || 'Fout bij ophalen WalkScore data') + '</span>';
+                }
+            })
+            .catch(err => {
+                console.error('WalkScore error:', err);
+                walkscoreLoading.style.display = 'none';
+                walkscoreContent.style.display = 'block';
+                walkscoreContent.innerHTML = '<span class="text-danger">Fout bij ophalen WalkScore data: ' + err.message + '</span>';
+            });
+        });
+    } else {
+        console.log('WalkScore elements not found:', {
+            walkscoreRefreshBtn: !!walkscoreRefreshBtn,
+            walkscoreCard: !!walkscoreCard,
+            walkscoreLoading: !!walkscoreLoading,
+            walkscoreContent: !!walkscoreContent
+        });
+    }
+
+    // PDOK Data verversen
+    const pdokCard = document.getElementById('pdok-card');
+    const pdokRefreshBtn = document.getElementById('pdok-refresh-btn');
+    const pdokLoading = document.getElementById('pdok-loading');
+    const pdokContent = document.getElementById('pdok-content');
+    
+    if (pdokRefreshBtn && pdokCard && pdokLoading && pdokContent) {
+        pdokRefreshBtn.addEventListener('click', function() {
+            console.log('PDOK refresh button clicked');
+            pdokLoading.style.display = 'block';
+            pdokContent.style.display = 'none';
+            
+            const dossierId = {{ dossier.id }};
+            
+            const requestData = { 
+                dossier_id: dossierId 
+            };
+            
+            console.log('DEBUG PDOK JS: Sending request data:', requestData);
+            
+            fetch('/api/pdok_lookup_and_save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData)
+            })
+            .then(resp => {
+                console.log('PDOK response status:', resp.status);
+                return resp.json();
+            })
+            .then(data => {
+                console.log('PDOK response data:', data);
+                pdokLoading.style.display = 'none';
+                pdokContent.style.display = 'block';
+                if (data.success) {
+                    // Reload page to show updated data
+                    location.reload();
+                } else {
+                    pdokContent.innerHTML = '<span class="text-danger">' + (data.error || 'Fout bij ophalen PDOK data') + '</span>';
+                }
+            })
+            .catch(err => {
+                console.error('PDOK error:', err);
+                pdokLoading.style.display = 'none';
+                pdokContent.style.display = 'block';
+                pdokContent.innerHTML = '<span class="text-danger">Fout bij ophalen PDOK data: ' + err.message + '</span>';
+            });
+        });
+    } else {
+        console.log('PDOK elements not found:', {
+            pdokRefreshBtn: !!pdokRefreshBtn,
+            pdokCard: !!pdokCard,
+            pdokLoading: !!pdokLoading,
+            pdokContent: !!pdokContent
+        });
     }
 });
 </script>

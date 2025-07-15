@@ -12,6 +12,8 @@ from functools import wraps
 import requests
 from bag_service import BagService
 from woz_service import WozService
+from walkscore_service import WalkScoreService
+from pdok_service import PDOKService
 import json
 
 try:
@@ -63,6 +65,8 @@ class Dossier(db.Model):
     documents = db.relationship('Document', backref='dossier', lazy=True)
     woz_data = db.relationship('WozData', lazy=True)
     bag_data = db.relationship('BagData', lazy=True)
+    walkscore_data = db.relationship('WalkScoreData', lazy=True)
+    pdok_data = db.relationship('PDOKData', lazy=True)
 
 class Taxatie(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -234,6 +238,95 @@ class BagData(db.Model):
     # Relationships
     dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id'), nullable=True)
 
+class WalkScoreData(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # WalkScore information
+    walkscore = db.Column(db.Integer, nullable=True)
+    description = db.Column(db.String(500), nullable=True)
+    logo_url = db.Column(db.String(500), nullable=True)
+    more_info_icon = db.Column(db.String(500), nullable=True)
+    more_info_link = db.Column(db.String(500), nullable=True)
+    ws_link = db.Column(db.String(500), nullable=True)
+    help_link = db.Column(db.String(500), nullable=True)
+    
+    # Location data
+    snapped_lat = db.Column(db.Float, nullable=True)
+    snapped_lon = db.Column(db.Float, nullable=True)
+    
+    # Transit score
+    transit_score = db.Column(db.Integer, nullable=True)
+    transit_description = db.Column(db.String(500), nullable=True)
+    transit_summary = db.Column(db.String(500), nullable=True)
+    
+    # Bike score
+    bike_score = db.Column(db.Integer, nullable=True)
+    bike_description = db.Column(db.String(500), nullable=True)
+    
+    # Metadata
+    last_updated = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    api_response_data = db.Column(db.Text, nullable=True)  # Store full JSON response
+    
+    # Relationships
+    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id'), nullable=True)
+
+class PDOKData(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Address and identification
+    bag_id = db.Column(db.String(50), nullable=True)
+    search_successful = db.Column(db.Boolean, nullable=True)
+    address = db.Column(db.String(200), nullable=True)
+    latitude = db.Column(db.Float, nullable=True)
+    longitude = db.Column(db.Float, nullable=True)
+    
+    # Basic property information
+    status = db.Column(db.String(50), nullable=True)
+    bouwjaar = db.Column(db.String(10), nullable=True)
+    oppervlakte = db.Column(db.String(20), nullable=True)
+    property_type = db.Column(db.String(100), nullable=True)
+    
+    # 3D Data
+    building_height = db.Column(db.Float, nullable=True)
+    roof_height = db.Column(db.Float, nullable=True)
+    ground_height = db.Column(db.Float, nullable=True)
+    building_volume = db.Column(db.Float, nullable=True)
+    roof_type = db.Column(db.String(100), nullable=True)
+    model_3d_available = db.Column(db.Boolean, nullable=True)
+    
+    # Kadastrale Data
+    perceel_id = db.Column(db.String(50), nullable=True)
+    kadastrale_gemeente = db.Column(db.String(100), nullable=True)
+    sectie = db.Column(db.String(10), nullable=True)
+    perceelnummer = db.Column(db.String(20), nullable=True)
+    perceel_oppervlakte = db.Column(db.Float, nullable=True)
+    eigenaar_type = db.Column(db.String(100), nullable=True)
+    perceel_gebruik = db.Column(db.String(100), nullable=True)
+    
+    # Topographic Context
+    surrounding_buildings = db.Column(db.Integer, nullable=True)
+    land_use = db.Column(db.Text, nullable=True)  # JSON array
+    infrastructure = db.Column(db.Text, nullable=True)  # JSON array
+    water_features = db.Column(db.Text, nullable=True)  # JSON array
+    
+    # Data quality indicators
+    has_basic_info = db.Column(db.Boolean, nullable=True)
+    has_3d_data = db.Column(db.Boolean, nullable=True)
+    has_kadastrale_data = db.Column(db.Boolean, nullable=True)
+    has_topographic_data = db.Column(db.Boolean, nullable=True)
+    data_sources = db.Column(db.Text, nullable=True)  # JSON array
+    
+    # Property type categorization
+    property_type_category = db.Column(db.String(50), nullable=True)
+    taxatie_relevance_score = db.Column(db.Integer, nullable=True)
+    
+    # Metadata
+    last_updated = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    api_response_data = db.Column(db.Text, nullable=True)  # Store full JSON response
+    
+    # Relationships
+    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id'), nullable=True)
+
 def get_setting(key, default=None):
     setting = Setting.query.filter_by(key=key).first()
     return setting.value if setting else default
@@ -270,40 +363,62 @@ def create_app(config_name='development'):
     
     # Register blueprints and routes
     with app.app_context():
-        try:
-            # Initialize database
-            db.create_all()
-            
-            # Create default admin user if it doesn't exist
-            admin_user = User.query.filter_by(username='admin').first()
-            if not admin_user:
-                admin_user = User(
-                    username='admin',
-                    email='admin@pandoorac.local',
-                    full_name='Administrator',
-                    role='admin'
-                )
-                admin_user.set_password('admin')
-                db.session.add(admin_user)
-                db.session.commit()
-                print("Default admin user created: admin/admin")
-            
-            # Initialize storage
-            storage.ensure_container_exists()
-            
-            # Zet default API urls in de database als ze nog niet bestaan
-            if get_setting('BAG_API_URL') is None:
-                set_setting('BAG_API_URL', 'https://api.bag.kadaster.nl/lvbag/individuelebevragingen/v2')
-            if get_setting('BAG_PDOK_API_URL') is None:
-                set_setting('BAG_PDOK_API_URL', 'https://data.pdok.nl/bag/api/v1/')
-            if get_setting('STREETSMART_API_URL') is None:
-                set_setting('STREETSMART_API_URL', 'https://developer.cyclomedia.com/our-apis/street-smart/')
-            if get_setting('WALKSCORE_API_URL') is None:
-                set_setting('WALKSCORE_API_URL', 'https://api.walkscore.com/score?format=json&address=…&lat=…&lon=…&wsapikey=YOUR_API_KEY')
-        except Exception as e:
-            print(f"Warning: Error during app initialization: {e}")
-            # Don't fail the app startup, just log the error
-            # The app can still start and handle requests
+        # Initialize database with retry mechanism
+        max_db_retries = 10
+        db_retry_delay = 2
+        
+        for db_attempt in range(max_db_retries):
+            try:
+                print(f"Attempting database initialization (attempt {db_attempt + 1}/{max_db_retries})")
+                
+                # Test database connection first
+                db.session.execute('SELECT 1')
+                print("Database connection successful")
+                
+                # Initialize database
+                db.create_all()
+                print("Database tables created successfully")
+                
+                # Create default admin user if it doesn't exist
+                admin_user = User.query.filter_by(username='admin').first()
+                if not admin_user:
+                    admin_user = User(
+                        username='admin',
+                        email='admin@pandoorac.local',
+                        full_name='Administrator',
+                        role='admin'
+                    )
+                    admin_user.set_password('admin')
+                    db.session.add(admin_user)
+                    db.session.commit()
+                    print("Default admin user created: admin/admin")
+                
+                # Initialize storage
+                storage.ensure_container_exists()
+                
+                # Zet default API urls in de database als ze nog niet bestaan
+                if get_setting('BAG_API_URL') is None:
+                    set_setting('BAG_API_URL', 'https://api.bag.kadaster.nl/lvbag/individuelebevragingen/v2')
+                if get_setting('BAG_PDOK_API_URL') is None:
+                    set_setting('BAG_PDOK_API_URL', 'https://data.pdok.nl/bag/api/v1/')
+                if get_setting('STREETSMART_API_URL') is None:
+                    set_setting('STREETSMART_API_URL', 'https://developer.cyclomedia.com/our-apis/street-smart/')
+                if get_setting('WALKSCORE_API_URL') is None:
+                    set_setting('WALKSCORE_API_URL', 'https://api.walkscore.com/score?format=json&address=…&lat=…&lon=…&wsapikey=YOUR_API_KEY')
+                
+                print("Database initialization completed successfully")
+                break
+                
+            except Exception as e:
+                print(f"Database initialization failed on attempt {db_attempt + 1}: {e}")
+                if db_attempt < max_db_retries - 1:
+                    print(f"Retrying database initialization in {db_retry_delay} seconds...")
+                    time.sleep(db_retry_delay)
+                    db_retry_delay *= 1.5  # Gradual backoff
+                else:
+                    print("Max database retries reached. App will start but database operations may fail.")
+                    # Don't fail the app startup, just log the error
+                    # The app can still start and handle requests
     
     return app
 
@@ -724,6 +839,7 @@ def admin():
             set_setting('STREETSMART_API_KEY', request.form.get('streetsmart_api_key'))
             set_setting('WALKSCORE_API_URL', request.form.get('walkscore_api_url'))
             set_setting('WALKSCORE_API_KEY', request.form.get('walkscore_api_key'))
+            set_setting('pdok_api_url', request.form.get('pdok_api_url'))
             log = UserLog(
                 user_id=current_user.id,
                 action='update_api_config',
@@ -778,7 +894,8 @@ def admin():
                          streetsmart_api_url=get_setting('STREETSMART_API_URL', ''),
                          streetsmart_api_key=get_setting('STREETSMART_API_KEY', ''),
                          walkscore_api_url=get_setting('WALKSCORE_API_URL', ''),
-                         walkscore_api_key=get_setting('WALKSCORE_API_KEY', ''))
+                         walkscore_api_key=get_setting('WALKSCORE_API_KEY', ''),
+                         pdok_api_url=get_setting('pdok_api_url', ''))
 
 @app.route('/api/bag_lookup', methods=['GET'])
 @login_required
@@ -1055,6 +1172,380 @@ def woz_lookup_and_save():
             'success': False,
             'error': f'Fout bij WOZ lookup en opslag: {str(e)}'
         }), 500
+
+@app.route('/api/walkscore_lookup', methods=['GET'])
+@login_required
+def walkscore_lookup():
+    """Lookup WalkScore data for an address"""
+    postcode = request.args.get('postcode', '').replace(' ', '').upper()
+    huisnummer = request.args.get('huisnummer', '')
+    huisletter = request.args.get('huisletter', '')
+    lat = request.args.get('lat', type=float)
+    lon = request.args.get('lon', type=float)
+    
+    if not postcode or not huisnummer:
+        return jsonify({'error': 'Postcode en huisnummer zijn verplicht'}), 400
+    
+    if not lat or not lon:
+        return jsonify({'error': 'Latitude en longitude zijn verplicht voor WalkScore API'}), 400
+    
+    api_url = get_setting('WALKSCORE_API_URL')
+    api_key = get_setting('WALKSCORE_API_KEY')
+    if not api_url or not api_key:
+        return jsonify({'error': 'WalkScore API URL of API key ontbreekt!'}), 400
+    
+    walkscore_service = WalkScoreService(api_url, api_key)
+    result, status = walkscore_service.lookup_walkscore(postcode, huisnummer, huisletter, lat, lon)
+    return jsonify(result), status
+
+@app.route('/api/walkscore_lookup_and_save', methods=['POST'])
+@login_required
+def walkscore_lookup_and_save():
+    """Lookup WalkScore data and save to database for a dossier"""
+    data = request.get_json()
+    postcode = data.get('postcode', '').replace(' ', '').upper()
+    huisnummer = data.get('huisnummer', '')
+    huisletter = data.get('huisletter', '')
+    dossier_id = data.get('dossier_id')
+    
+    if not postcode or not huisnummer:
+        return jsonify({'error': 'Postcode en huisnummer zijn verplicht'}), 400
+    
+    if not dossier_id:
+        return jsonify({'error': 'Dossier ID is verplicht'}), 400
+    
+    try:
+        # Check if dossier exists and user has access
+        dossier = Dossier.query.get_or_404(dossier_id)
+        if dossier.user_id != current_user.id:
+            return jsonify({'error': 'Geen toegang tot dit dossier'}), 403
+        
+        api_url = get_setting('WALKSCORE_API_URL')
+        api_key = get_setting('WALKSCORE_API_KEY')
+        if not api_url or not api_key:
+            return jsonify({'error': 'WalkScore API URL of API key ontbreekt!'}), 400
+        
+        walkscore_service = WalkScoreService(api_url, api_key)
+        
+        # Get coordinates from BAG data or PDOK data
+        lat = None
+        lon = None
+        
+        # First try to get coordinates from BAG data
+        bag_data = BagData.query.filter_by(dossier_id=dossier_id).first()
+        if bag_data and bag_data.latitude and bag_data.longitude:
+            lat = bag_data.latitude
+            lon = bag_data.longitude
+        else:
+            # Try to get coordinates from PDOK data
+            pdok_data = PDOKData.query.filter_by(dossier_id=dossier_id).first()
+            if pdok_data and pdok_data.latitude and pdok_data.longitude:
+                lat = pdok_data.latitude
+                lon = pdok_data.longitude
+        
+        if not lat or not lon:
+            return jsonify({
+                'success': False,
+                'error': 'Geen coördinaten gevonden. Voer eerst BAG of PDOK data in om de locatie te bepalen.'
+            }), 400
+        
+        result, status = walkscore_service.lookup_walkscore(postcode, huisnummer, huisletter, lat, lon)
+        
+        if status == 200 and result.get('success'):
+            # Check if WalkScore data already exists for this dossier
+            existing_walkscore = WalkScoreData.query.filter_by(dossier_id=dossier_id).first()
+            
+            if existing_walkscore:
+                # Update existing WalkScore data
+                walkscore_data = existing_walkscore
+            else:
+                # Create new WalkScore data
+                walkscore_data = WalkScoreData(dossier_id=dossier_id)
+            
+            # Update WalkScore data fields
+            data = result['data']
+            walkscore_data.walkscore = data.get('walkscore')
+            walkscore_data.description = data.get('description')
+            walkscore_data.logo_url = data.get('logo_url')
+            walkscore_data.more_info_icon = data.get('more_info_icon')
+            walkscore_data.more_info_link = data.get('more_info_link')
+            walkscore_data.ws_link = data.get('ws_link')
+            walkscore_data.help_link = data.get('help_link')
+            walkscore_data.snapped_lat = data.get('snapped_lat')
+            walkscore_data.snapped_lon = data.get('snapped_lon')
+            
+            # Update transit data
+            if 'transit' in data and data['transit']:
+                transit = data['transit']
+                walkscore_data.transit_score = transit.get('score')
+                walkscore_data.transit_description = transit.get('description')
+                walkscore_data.transit_summary = transit.get('summary')
+            
+            # Update bike data
+            if 'bike' in data and data['bike']:
+                bike = data['bike']
+                walkscore_data.bike_score = bike.get('score')
+                walkscore_data.bike_description = bike.get('description')
+            
+            walkscore_data.api_response_data = json.dumps(result.get('raw_response', {}))
+            walkscore_data.last_updated = datetime.utcnow()
+            
+            if not existing_walkscore:
+                db.session.add(walkscore_data)
+            
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'WalkScore data succesvol opgeslagen',
+                'data': data
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Onbekende fout bij WalkScore lookup')
+            }), status
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Fout bij WalkScore lookup en opslag: {str(e)}'
+        }), 500
+
+@app.route('/api/pdok_lookup', methods=['GET'])
+@login_required
+def pdok_lookup():
+    try:
+        postcode = request.args.get('postcode')
+        huisnummer = request.args.get('huisnummer')
+        huisletter = request.args.get('huisletter')
+        
+        if not postcode or not huisnummer:
+            return jsonify({'error': 'Postcode and huisnummer are required'}), 400
+        
+        # Use hardcoded PDOK API URL (open data, no key required)
+        pdok_api_url = 'https://data.pdok.nl/bag/api/v1/'
+        
+        if not pdok_api_url:
+            return jsonify({'error': 'BAG PDOK API URL not configured'}), 400
+        
+        # Initialize PDOK service (no API key needed for open data)
+        pdok_service = PDOKService(pdok_api_url)
+        
+        # Lookup PDOK data
+        response_data, status_code = pdok_service.lookup_pdok_data(
+            postcode, huisnummer, huisletter
+        )
+        
+        return jsonify(response_data), status_code
+        
+    except Exception as e:
+        app.logger.error(f"Error in PDOK lookup: {e}")
+        return jsonify({'error': f'Error in PDOK lookup: {str(e)}'}), 500
+
+@app.route('/api/pdok_lookup_and_save', methods=['POST'])
+@login_required
+def pdok_lookup_and_save():
+    try:
+        data = request.get_json()
+        dossier_id = data.get('dossier_id')
+        
+        if not dossier_id:
+            return jsonify({'error': 'Dossier ID is required'}), 400
+        
+        dossier = Dossier.query.get(dossier_id)
+        if not dossier:
+            return jsonify({'error': 'Dossier not found'}), 404
+        
+        # Get address information from dossier
+        postcode = dossier.postcode
+        # Extract huisnummer from dossier.adres (e.g., "Pippelingstraat 31" -> "31")
+        adres_parts = dossier.adres.split(',')[0].split(' ')
+        huisnummer = None
+        huisletter = None
+        
+        # Find huisnummer in address parts
+        for part in adres_parts:
+            # Remove common suffixes and check if it's a number
+            import re
+            clean_part = re.sub(r'[-ABab]', '', part)
+            try:
+                int(clean_part)  # Check if it's a number
+                huisnummer = clean_part
+                # Check if there's a letter after the number
+                if len(part) > len(clean_part):
+                    huisletter = part[len(clean_part):]
+                break
+            except ValueError:
+                continue
+        
+        if not postcode or not huisnummer:
+            return jsonify({'error': 'Postcode and huisnummer could not be extracted from dossier data'}), 400
+        
+        # Use hardcoded PDOK API URL (open data, no key required)
+        pdok_api_url = 'https://geodata.nationaalgeoregister.nl/locatieserver/v3/'
+        
+        # Initialize PDOK service (no API key needed for open data)
+        pdok_service = PDOKService(pdok_api_url)
+        
+        # Lookup PDOK data
+        response_data, status_code = pdok_service.lookup_pdok_data(
+            postcode, 
+            huisnummer, 
+            huisletter
+        )
+        
+        if status_code != 200:
+            return jsonify(response_data), status_code
+        
+        # Extract data for database storage
+        pdok_data_dict = response_data.get('data', {})
+        address_info = pdok_data_dict.get('address_info', {})
+        property_data = pdok_data_dict.get('property_data', {})
+        data_quality = pdok_data_dict.get('data_quality', {})
+        
+        # Calculate property type and relevance score
+        property_type_category = pdok_service.get_property_type_category(
+            property_data.get('basic_info', {}).get('property_type', '')
+        )
+        taxatie_relevance_score = pdok_service.get_taxatie_relevance_score(property_data)
+        
+        # Extract data quality indicators
+        data_quality = pdok_data_dict.get('data_quality', {})
+        
+        # Save to database
+        existing_data = PDOKData.query.filter_by(dossier_id=dossier_id).first()
+        if existing_data:
+            # Update existing record
+            existing_data.bag_id = address_info.get('bag_id')
+            existing_data.search_successful = address_info.get('search_successful')
+            existing_data.address = address_info.get('address')
+            
+            # Coordinates
+            coordinates = address_info.get('coordinates', {})
+            existing_data.latitude = coordinates.get('latitude')
+            existing_data.longitude = coordinates.get('longitude')
+            
+            # Basic property information
+            basic_info = property_data.get('basic_info', {})
+            existing_data.status = basic_info.get('status')
+            existing_data.bouwjaar = basic_info.get('bouwjaar')
+            existing_data.oppervlakte = basic_info.get('oppervlakte')
+            existing_data.property_type = basic_info.get('property_type')
+            
+            # 3D Data
+            three_d_data = property_data.get('3d_data', {})
+            existing_data.building_height = three_d_data.get('height')
+            existing_data.roof_height = three_d_data.get('roof_height')
+            existing_data.ground_height = three_d_data.get('ground_height')
+            existing_data.building_volume = three_d_data.get('building_volume')
+            existing_data.roof_type = three_d_data.get('roof_type')
+            existing_data.model_3d_available = three_d_data.get('3d_model_available')
+            
+            # Kadastrale Data
+            kadastrale_data = property_data.get('kadastrale_data', {})
+            existing_data.perceel_id = kadastrale_data.get('perceel_id')
+            existing_data.kadastrale_gemeente = kadastrale_data.get('kadastrale_gemeente')
+            existing_data.sectie = kadastrale_data.get('sectie')
+            existing_data.perceelnummer = kadastrale_data.get('perceelnummer')
+            existing_data.perceel_oppervlakte = kadastrale_data.get('oppervlakte')
+            existing_data.eigenaar_type = kadastrale_data.get('eigenaar_type')
+            existing_data.perceel_gebruik = kadastrale_data.get('gebruik')
+            
+            # Topographic Context
+            topographic_context = property_data.get('topographic_context', {})
+            existing_data.surrounding_buildings = topographic_context.get('surrounding_buildings')
+            existing_data.land_use = json.dumps(topographic_context.get('land_use', []))
+            existing_data.infrastructure = json.dumps(topographic_context.get('infrastructure', []))
+            existing_data.water_features = json.dumps(topographic_context.get('water_features', []))
+            
+            # Data quality indicators
+            existing_data.has_basic_info = data_quality.get('has_basic_info')
+            existing_data.has_3d_data = data_quality.get('has_3d_data')
+            existing_data.has_kadastrale_data = data_quality.get('has_kadastrale_data')
+            existing_data.has_topographic_data = data_quality.get('has_topographic_data')
+            existing_data.data_sources = json.dumps(data_quality.get('data_sources', []))
+            
+            # Property categorization
+            existing_data.property_type_category = property_type_category
+            existing_data.taxatie_relevance_score = taxatie_relevance_score
+            
+            existing_data.last_updated = datetime.utcnow()
+            existing_data.api_response_data = json.dumps(response_data)
+            pdok_data = existing_data
+        else:
+            # Create new record
+            coordinates = address_info.get('coordinates', {})
+            basic_info = property_data.get('basic_info', {})
+            three_d_data = property_data.get('3d_data', {})
+            kadastrale_data = property_data.get('kadastrale_data', {})
+            topographic_context = property_data.get('topographic_context', {})
+            
+            pdok_data = PDOKData(
+                dossier_id=dossier_id,
+                bag_id=address_info.get('bag_id'),
+                search_successful=address_info.get('search_successful'),
+                address=address_info.get('address'),
+                latitude=coordinates.get('latitude'),
+                longitude=coordinates.get('longitude'),
+                
+                # Basic property information
+                status=basic_info.get('status'),
+                bouwjaar=basic_info.get('bouwjaar'),
+                oppervlakte=basic_info.get('oppervlakte'),
+                property_type=basic_info.get('property_type'),
+                
+                # 3D Data
+                building_height=three_d_data.get('height'),
+                roof_height=three_d_data.get('roof_height'),
+                ground_height=three_d_data.get('ground_height'),
+                building_volume=three_d_data.get('building_volume'),
+                roof_type=three_d_data.get('roof_type'),
+                model_3d_available=three_d_data.get('3d_model_available'),
+                
+                # Kadastrale Data
+                perceel_id=kadastrale_data.get('perceel_id'),
+                kadastrale_gemeente=kadastrale_data.get('kadastrale_gemeente'),
+                sectie=kadastrale_data.get('sectie'),
+                perceelnummer=kadastrale_data.get('perceelnummer'),
+                perceel_oppervlakte=kadastrale_data.get('oppervlakte'),
+                eigenaar_type=kadastrale_data.get('eigenaar_type'),
+                perceel_gebruik=kadastrale_data.get('gebruik'),
+                
+                # Topographic Context
+                surrounding_buildings=topographic_context.get('surrounding_buildings'),
+                land_use=json.dumps(topographic_context.get('land_use', [])),
+                infrastructure=json.dumps(topographic_context.get('infrastructure', [])),
+                water_features=json.dumps(topographic_context.get('water_features', [])),
+                
+                # Data quality indicators
+                has_basic_info=data_quality.get('has_basic_info'),
+                has_3d_data=data_quality.get('has_3d_data'),
+                has_kadastrale_data=data_quality.get('has_kadastrale_data'),
+                has_topographic_data=data_quality.get('has_topographic_data'),
+                data_sources=json.dumps(data_quality.get('data_sources', [])),
+                
+                # Property categorization
+                property_type_category=property_type_category,
+                taxatie_relevance_score=taxatie_relevance_score,
+                
+                api_response_data=json.dumps(response_data)
+            )
+            db.session.add(pdok_data)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'PDOK data saved successfully',
+            'data': response_data
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"Error saving PDOK data: {e}")
+        return jsonify({'error': f'Error saving PDOK data: {str(e)}'}), 500
 
 def safe_int(val):
     """Safely convert value to integer"""
@@ -1402,6 +1893,24 @@ def isdigit_filter(s):
         return False
     return str(s).isdigit()
 
+@app.template_filter('walkscore_color')
+def walkscore_color_filter(score):
+    """Get color class for WalkScore display"""
+    try:
+        score_int = int(score)
+        if score_int >= 90:
+            return "text-green-600"
+        elif score_int >= 70:
+            return "text-green-500"
+        elif score_int >= 50:
+            return "text-yellow-600"
+        elif score_int >= 25:
+            return "text-orange-500"
+        else:
+            return "text-red-500"
+    except (ValueError, TypeError):
+        return "text-muted"
+
 @app.route('/dossier/<int:dossier_id>/taxatie/bereken', methods=['POST', 'OPTIONS'])
 def bereken_taxatie(dossier_id):
     # Handle CORS preflight request
@@ -1512,6 +2021,4 @@ def startup_health_check():
     }), 200
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
     app.run(host='0.0.0.0', port=5001, debug=True) 

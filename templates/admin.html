@@ -210,14 +210,7 @@
                             <label for="bag_api_key" class="form-label">BAG Individuele Bevraging API Key</label>
                             <input type="password" class="form-control" id="bag_api_key" name="bag_api_key" value="{{ bag_api_key }}">
                         </div>
-                        <div class="mb-3">
-                            <label for="bag_pdok_api_url" class="form-label">BAG PDOK API URL</label>
-                            <input type="text" class="form-control" id="bag_pdok_api_url" name="bag_pdok_api_url" value="{{ bag_pdok_api_url }}">
-                        </div>
-                        <div class="mb-3">
-                            <label for="bag_pdok_api_key" class="form-label">BAG PDOK API Key</label>
-                            <input type="password" class="form-control" id="bag_pdok_api_key" name="bag_pdok_api_key" value="{{ bag_pdok_api_key }}">
-                        </div>
+                        <!-- BAG PDOK API URL field removed: PDOK is open data and the URL is hardcoded in the backend -->
                         <div class="mb-3">
                             <label for="streetsmart_api_url" class="form-label">StreetSmart API URL</label>
                             <input type="text" class="form-control" id="streetsmart_api_url" name="streetsmart_api_url" value="{{ streetsmart_api_url }}">
@@ -228,11 +221,23 @@
                         </div>
                         <div class="mb-3">
                             <label for="walkscore_api_url" class="form-label">WalkScore API URL</label>
-                            <input type="text" class="form-control" id="walkscore_api_url" name="walkscore_api_url" value="{{ walkscore_api_url }}">
+                            <input type="text" class="form-control" id="walkscore_api_url" name="walkscore_api_url" value="{{ walkscore_api_url or 'https://api.walkscore.com/score' }}" placeholder="https://api.walkscore.com/score">
+                            <small class="form-text text-muted">Do not include the API key in the URL. Only use the base endpoint.</small>
                         </div>
                         <div class="mb-3">
-                            <label for="walkscore_api_key" class="form-label">WalkScore API Key</label>
-                            <input type="password" class="form-control" id="walkscore_api_key" name="walkscore_api_key" value="{{ walkscore_api_key }}">
+                            <label for="walkscore_api_key" class="form-label">WalkScore API Key <span class="text-danger">*</span></label>
+                            <input type="password" class="form-control" id="walkscore_api_key" name="walkscore_api_key" value="{{ walkscore_api_key }}" required>
+                            <small class="form-text text-muted">Your WalkScore API key is required and will be kept secure.</small>
+                            {% if not walkscore_api_key %}
+                            <div class="alert alert-warning mt-2" role="alert">
+                                <i class="bi bi-exclamation-triangle"></i> WalkScore API key is required for WalkScore lookups.
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="mb-3">
+                            <label for="pdok_api_url" class="form-label">PDOK API URL (Open Data - No Key Required)</label>
+                            <input type="text" class="form-control" id="pdok_api_url" name="pdok_api_url" value="{{ pdok_api_url }}" placeholder="https://data.pdok.nl/bag/api/v1/">
+                            <small class="form-text text-muted">PDOK is open data and doesn't require an API key</small>
                         </div>
                         <button type="submit" class="btn btn-primary">API configuraties bijwerken</button>
                     </form>
