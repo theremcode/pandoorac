@@ -1,0 +1,73 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}-postgresql-backup
+spec:
+  schedule: {{ .Values.backup.schedule | default "0 2 * * *" }}
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          {{- if .Values.nodePlacement.enabled }}
+          {{- with .Values.nodePlacement.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.nodePlacement.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- end }}
+          containers:
+          - name: postgresql-backup
+            image: postgres:14
+            env:
+            - name: PGPASSWORD
+              value: {{ .Values.postgresql.password }}
+            - name: POSTGRES_USER
+              value: {{ .Values.postgresql.username }}
+            - name: POSTGRES_DB
+              value: {{ .Values.postgresql.database }}
+            command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              
+              # Create backup directory with timestamp
+              BACKUP_DIR="/backup/$(date +%Y-%m-%d_%H-%M-%S)"
+              mkdir -p "$BACKUP_DIR"
+              
+              echo "Starting PostgreSQL backup at $(date)"
+              
+              # PostgreSQL backup
+              pg_dump -h {{ .Release.Name }}-postgresql \
+                      -p 5432 \
+                      -U "$POSTGRES_USER" \
+                      -d "$POSTGRES_DB" \
+                      --verbose \
+                      --format=custom \
+                      --file="$BACKUP_DIR/postgresql-backup.dump"
+              
+              # Create a compressed archive
+              cd /backup
+              tar -czf "$BACKUP_DIR/postgresql-backup.tar.gz" "$(basename "$BACKUP_DIR")"
+              
+              echo "PostgreSQL backup completed at $(date)"
+              echo "Backup size: $(du -h "$BACKUP_DIR/postgresql-backup.tar.gz" | cut -f1)"
+              
+              # Clean up old backups (keep last {{ .Values.backup.retention | default 7 }} days)
+              find /backup -name "*.tar.gz" -mtime +{{ .Values.backup.retention | default 7 }} -delete
+              
+              echo "Backup cleanup completed"
+            volumeMounts:
+            - name: backup-storage
+              mountPath: /backup
+          volumes:
+          - name: backup-storage
+            persistentVolumeClaim:
+              claimName: {{ .Release.Name }}-backup-storage
+{{- end }} 

@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Welkom bij Pandoorac{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8 text-center">
+        <h1 class="display-4 mb-4">Welkom bij Pandoorac</h1>
+        <p class="lead mb-4">
+            Uw digitale platform voor het beheren van taxatiedossiers en documenten.
+        </p>
+        
+        {% if not current_user.is_authenticated %}
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title mb-4">Aan de slag</h5>
+                        <div class="d-grid gap-3">
+                            <a href="{{ url_for('login') }}" class="btn btn-primary">
+                                <i class="bi bi-box-arrow-in-right"></i> Inloggen
+                            </a>
+                            <a href="{{ url_for('register') }}" class="btn btn-outline-primary">
+                                <i class="bi bi-person-plus"></i> Registreren
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title mb-4">Snelle toegang</h5>
+                        <div class="d-grid gap-3">
+                            <a href="{{ url_for('dossiers') }}" class="btn btn-primary">
+                                <i class="bi bi-folder"></i> Bekijk uw dossiers
+                            </a>
+                            <a href="{{ url_for('nieuw_dossier') }}" class="btn btn-outline-primary">
+                                <i class="bi bi-plus-circle"></i> Nieuw dossier
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %} 

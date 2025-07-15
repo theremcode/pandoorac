@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+
+{% block title %}Nieuw Dossier{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title mb-4">Nieuw Dossier</h2>
+                <form method="POST" action="{{ url_for('nieuw_dossier') }}">
+                    <div class="mb-3">
+                        <label for="naam" class="form-label">Naam</label>
+                        <input type="text" class="form-control" id="naam" name="naam" required>
+                        <div class="form-text">Bijvoorbeeld: "Appartement Centrum" of "Woonhuis Parkweg"</div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="postcode" class="form-label">Postcode</label>
+                            <input type="text" class="form-control" id="postcode" name="postcode" pattern="^[1-9][0-9]{3}[A-Z]{2}$" maxlength="6" required>
+                            <div class="form-text">Bijvoorbeeld: 1234AB</div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="huisnummer" class="form-label">Huisnummer</label>
+                            <input type="number" class="form-control" id="huisnummer" name="huisnummer" min="1" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="huisletter" class="form-label">Huisletter (optioneel)</label>
+                            <input type="text" class="form-control" id="huisletter" name="huisletter" maxlength="1" pattern="[A-Za-z]?">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Volledig adres</label>
+                        <div class="form-control bg-light" id="volledig_adres" style="cursor: not-allowed;">Vul postcode en huisnummer in om het adres op te halen</div>
+                        <input type="hidden" id="adres" name="adres">
+                        <input type="hidden" id="plaats" name="plaats">
+                        <input type="hidden" id="bouwjaar" name="bouwjaar">
+                        <input type="hidden" id="oppervlakte" name="oppervlakte">
+                        <input type="hidden" id="inhoud" name="inhoud">
+                        <input type="hidden" id="hoogte" name="hoogte">
+                        <input type="hidden" id="aantal_bouwlagen" name="aantal_bouwlagen">
+                        <input type="hidden" id="gebruiksdoel" name="gebruiksdoel">
+                    </div>
+                    
+                    <!-- Duplicate Detection Alert -->
+                    <div id="duplicateAlert" class="alert alert-warning d-none mb-3">
+                        <div class="d-flex align-items-start">
+                            <i class="bi bi-exclamation-triangle me-2 mt-1"></i>
+                            <div class="flex-grow-1">
+                                <strong>Dossier bestaat al!</strong>
+                                <p class="mb-2" id="duplicateMessage">Er bestaat al een dossier voor dit adres.</p>
+                                <div id="existingDossierInfo" class="card bg-light">
+                                    <div class="card-body py-2">
+                                        <strong id="existingDossierName"></strong><br>
+                                        <small id="existingDossierAddress"></small><br>
+                                        <small class="text-muted">Aangemaakt op: <span id="existingDossierDate"></span></small>
+                                    </div>
+                                </div>
+                                <div class="mt-2">
+                                    <a href="#" id="goToExistingDossier" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-arrow-right"></i> Ga naar bestaand dossier
+                                    </a>
+                                    <button type="button" id="continueAnyway" class="btn btn-outline-warning btn-sm ms-2">
+                                        <i class="bi bi-plus-circle"></i> Toch doorgaan
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="button" class="btn btn-outline-primary mb-3" id="bag-lookup-btn">Adresgegevens ophalen</button>
+                    <div id="bag-result" class="mb-3"></div>
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('dossiers') }}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Terug
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i> Opslaan
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let lastAutoFilledNaam = '';
+const naamInput = document.getElementById('naam');
+let duplicateCheckTimeout;
+let duplicateFound = false;
+
+// Duplicate detection elements
+const duplicateAlert = document.getElementById('duplicateAlert');
+const duplicateMessage = document.getElementById('duplicateMessage');
+const existingDossierName = document.getElementById('existingDossierName');
+const existingDossierAddress = document.getElementById('existingDossierAddress');
+const existingDossierDate = document.getElementById('existingDossierDate');
+const goToExistingDossier = document.getElementById('goToExistingDossier');
+const continueAnyway = document.getElementById('continueAnyway');
+
+document.getElementById('postcode').addEventListener('input', function(e) {
+    this.value = this.value.toUpperCase().replace(/\s/g, '');
+    checkForDuplicates();
+});
+
+document.getElementById('huisnummer').addEventListener('input', function() {
+    checkForDuplicates();
+});
+
+document.getElementById('huisletter').addEventListener('input', function() {
+    checkForDuplicates();
+});
+
+// Duplicate detection function
+function checkForDuplicates() {
+    const postcode = document.getElementById('postcode').value.trim();
+    const huisnummer = document.getElementById('huisnummer').value.trim();
+    const huisletter = document.getElementById('huisletter').value.trim();
+    
+    // Clear previous timeout
+    clearTimeout(duplicateCheckTimeout);
+    
+    // Only check if we have both postcode and huisnummer
+    if (!postcode || !huisnummer) {
+        hideDuplicateAlert();
+        return;
+    }
+    
+    // Debounce the duplicate check
+    duplicateCheckTimeout = setTimeout(() => {
+        const data = {
+            postcode: postcode,
+            huisnummer: huisnummer,
+            huisletter: huisletter
+        };
+        
+        fetch('/api/dossiers/check_duplicate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.duplicate_found) {
+                showDuplicateAlert(data.existing_dossier);
+            } else {
+                hideDuplicateAlert();
+            }
+        })
+        .catch(error => {
+            console.error('Error checking for duplicates:', error);
+            hideDuplicateAlert();
+        });
+    }, 500); // 500ms delay
+}
+
+function showDuplicateAlert(existingDossier) {
+    duplicateFound = true;
+    
+    // Update alert content
+    existingDossierName.textContent = existingDossier.naam;
+    existingDossierAddress.textContent = `${existingDossier.adres}, ${existingDossier.postcode} ${existingDossier.plaats}`;
+    existingDossierDate.textContent = existingDossier.created_at;
+    
+    // Set navigation link
+    goToExistingDossier.href = existingDossier.detail_url;
+    
+    // Show alert
+    duplicateAlert.classList.remove('d-none');
+    
+    // Scroll to alert
+    duplicateAlert.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function hideDuplicateAlert() {
+    duplicateFound = false;
+    duplicateAlert.classList.add('d-none');
+}
+
+// Handle "continue anyway" button
+continueAnyway.addEventListener('click', function() {
+    hideDuplicateAlert();
+});
+
+// Form submission validation
+document.querySelector('form').addEventListener('submit', function(e) {
+    if (duplicateFound) {
+        const confirmed = confirm('Er bestaat al een dossier voor dit adres. Weet u zeker dat u wilt doorgaan?');
+        if (!confirmed) {
+            e.preventDefault();
+            return false;
+        }
+    }
+});
+
+document.getElementById('bag-lookup-btn').addEventListener('click', async function() {
+    const postcode = document.getElementById('postcode').value.trim();
+    const huisnummer = document.getElementById('huisnummer').value.trim();
+    const huisletter = document.getElementById('huisletter').value.trim();
+    const resultDiv = document.getElementById('bag-result');
+    const volledigAdresDiv = document.getElementById('volledig_adres');
+    
+    resultDiv.innerHTML = '';
+    if (!postcode.match(/^[1-9][0-9]{3}[A-Z]{2}$/)) {
+        resultDiv.innerHTML = '<div class="alert alert-warning">Vul een geldige postcode in (1234AB).</div>';
+        volledigAdresDiv.textContent = 'Vul postcode en huisnummer in om het adres op te halen';
+        return;
+    }
+    if (!huisnummer) {
+        resultDiv.innerHTML = '<div class="alert alert-warning">Vul een huisnummer in.</div>';
+        volledigAdresDiv.textContent = 'Vul postcode en huisnummer in om het adres op te halen';
+        return;
+    }
+    
+    volledigAdresDiv.textContent = 'Adresgegevens worden opgehaald...';
+    resultDiv.innerHTML = 'Adresgegevens worden opgehaald...';
+    
+    try {
+        const params = new URLSearchParams({ postcode, huisnummer, huisletter });
+        const resp = await fetch(`/api/bag_lookup?${params.toString()}`);
+        const data = await resp.json();
+        if (data.error) {
+            resultDiv.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+            volledigAdresDiv.textContent = 'Vul postcode en huisnummer in om het adres op te halen';
+        } else {
+            // Update volledig adres
+            if (data.adres && data.adres.volledig) {
+                volledigAdresDiv.textContent = data.adres.volledig;
+                document.getElementById('adres').value = data.adres.volledig;
+                document.getElementById('plaats').value = data.adres.woonplaats || '';
+                // Prefill naamveld alleen als het leeg is of als het nog gelijk is aan de vorige autofill
+                if (!naamInput.value || naamInput.value === lastAutoFilledNaam) {
+                    naamInput.value = data.adres.volledig;
+                    lastAutoFilledNaam = data.adres.volledig;
+                }
+            } else {
+                volledigAdresDiv.textContent = 'Geen adres gevonden';
+                document.getElementById('adres').value = '';
+                document.getElementById('plaats').value = '';
+            }
+            // BAG extra gegevens in hidden inputs zetten
+            document.getElementById('bouwjaar').value = data.bouwjaar || '';
+            document.getElementById('oppervlakte').value = data.oppervlakte || '';
+            document.getElementById('inhoud').value = data.inhoud || '';
+            document.getElementById('hoogte').value = data.hoogte || '';
+            document.getElementById('aantal_bouwlagen').value = data.aantal_bouwlagen || '';
+            document.getElementById('gebruiksdoel').value = (data.gebruiksdoel && data.gebruiksdoel.length) ? data.gebruiksdoel.join(', ') : '';
+            
+            resultDiv.innerHTML = `
+                <div class="card card-body bg-light">
+                    <strong>Bouwjaar:</strong> ${data.bouwjaar || '-'}<br>
+                    <strong>Oppervlakte (m²):</strong> ${data.oppervlakte || '-'}<br>
+                    <strong>Inhoud (m³):</strong> ${data.inhoud || '-'}<br>
+                    <strong>Hoogte (m):</strong> ${data.hoogte || '-'}<br>
+                    <strong>Aantal bouwlagen:</strong> ${data.aantal_bouwlagen || '-'}<br>
+                    <strong>Gebruiksdoel:</strong> ${(data.gebruiksdoel && data.gebruiksdoel.length) ? data.gebruiksdoel.join(', ') : '-'}
+                </div>
+            `;
+        }
+    } catch (e) {
+        resultDiv.innerHTML = '<div class="alert alert-danger">Fout bij ophalen BAG gegevens.</div>';
+        volledigAdresDiv.textContent = 'Vul postcode en huisnummer in om het adres op te halen';
+    }
+});
+
+// Automatische BAG lookup bij wijziging van adresgegevens
+document.getElementById('postcode').addEventListener('change', function() {
+    if (document.getElementById('huisnummer').value) {
+        document.getElementById('bag-lookup-btn').click();
+    }
+});
+
+document.getElementById('huisnummer').addEventListener('change', function() {
+    if (document.getElementById('postcode').value) {
+        document.getElementById('bag-lookup-btn').click();
+    }
+});
+
+document.getElementById('huisletter').addEventListener('change', function() {
+    if (document.getElementById('postcode').value && document.getElementById('huisnummer').value) {
+        document.getElementById('bag-lookup-btn').click();
+    }
+});
+</script>
+{% endblock %} 

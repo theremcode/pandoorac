@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Registreren{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <h2 class="card-title text-center mb-4">Registreren</h2>
+                <form method="POST" action="{{ url_for('register') }}">
+                    <div class="mb-3">
+                        <label for="username" class="form-label">Gebruikersnaam</label>
+                        <input type="text" class="form-control" id="username" name="username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Wachtwoord</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                        <div class="form-text">Minimaal 8 karakters, inclusief letters en cijfers.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="password_confirm" class="form-label">Bevestig wachtwoord</label>
+                        <input type="password" class="form-control" id="password_confirm" name="password_confirm" required>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-person-plus"></i> Registreren
+                        </button>
+                    </div>
+                </form>
+                <div class="text-center mt-3">
+                    <p class="mb-0">Al een account? <a href="{{ url_for('login') }}">Log hier in</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.querySelector('form').addEventListener('submit', function(e) {
+    const password = document.getElementById('password').value;
+    const passwordConfirm = document.getElementById('password_confirm').value;
+    
+    if (password !== passwordConfirm) {
+        e.preventDefault();
+        alert('Wachtwoorden komen niet overeen');
+    }
+});
+</script>
+{% endblock %} 

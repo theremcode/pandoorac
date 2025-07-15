@@ -1,0 +1,13 @@
+{{- if .Values.backup.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-backup-storage
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ .Values.backup.storageClass | default "azure-storage" }}
+  resources:
+    requests:
+      storage: {{ .Values.backup.storageSize | default "10Gi" }}
+{{- end }} 

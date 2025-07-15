@@ -1,0 +1,388 @@
+{% extends "base.html" %}
+
+{% block title %}Dossiers{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Dossiers</h1>
+    <a href="{{ url_for('nieuw_dossier') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Nieuw Dossier
+    </a>
+</div>
+
+<!-- Search Section -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="searchInput" placeholder="Zoek in dossiers..." aria-label="Zoek in dossiers">
+                    <button class="btn btn-outline-secondary" type="button" id="searchBtn">
+                        <i class="bi bi-search"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" id="filterSelect">
+                    <option value="all">Alle velden</option>
+                    <option value="naam">Naam</option>
+                    <option value="adres">Adres</option>
+                    <option value="postcode">Postcode</option>
+                    <option value="plaats">Plaats</option>
+                    <option value="bouwjaar">Bouwjaar</option>
+                    <option value="gebruiksdoel">Gebruiksdoel</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" id="sortSelect">
+                    <option value="created_date_desc">Nieuwste eerst</option>
+                    <option value="created_date_asc">Oudste eerst</option>
+                    <option value="naam_asc">Naam A-Z</option>
+                    <option value="naam_desc">Naam Z-A</option>
+                    <option value="adres_asc">Adres A-Z</option>
+                    <option value="adres_desc">Adres Z-A</option>
+                </select>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search Results Info -->
+<div id="searchInfo" class="alert alert-info d-none mb-3">
+    <i class="bi bi-info-circle"></i> 
+    <span id="searchInfoText"></span>
+    <button type="button" class="btn-close float-end" id="clearSearchBtn"></button>
+</div>
+
+<!-- Loading Indicator -->
+<div id="loadingIndicator" class="text-center d-none mb-3">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Zoeken...</span>
+    </div>
+    <p class="mt-2">Zoeken naar dossiers...</p>
+</div>
+
+<!-- Dossiers Container -->
+<div id="dossiersContainer">
+{% if dossiers %}
+    <div class="row" id="dossiersGrid">
+    {% for dossier in dossiers %}
+        <div class="col-md-6 col-lg-4 mb-4 dossier-item" data-dossier-url="{{ url_for('dossier_detail', dossier_id=dossier.id) }}">
+            <div class="card h-100 dossier-card" style="cursor: pointer;">
+            <div class="card-body">
+                <h5 class="card-title">{{ dossier.naam }}</h5>
+                <p class="card-text">
+                    <i class="bi bi-geo-alt"></i> {{ dossier.adres }}<br>
+                    {{ dossier.postcode }} {{ dossier.plaats }}
+                </p>
+                <div class="d-flex justify-content-between align-items-center">
+                    <small class="text-muted">
+                        <i class="bi bi-calendar"></i> {{ dossier.created_at.strftime('%d-%m-%Y') }}
+                    </small>
+                    <div class="btn-group">
+                        <a href="{{ url_for('dossier_detail', dossier_id=dossier.id) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye"></i> Details
+                        </a>
+                        {% if dossier.taxaties|length == 0 %}
+                        <button type="button" class="btn btn-sm btn-outline-danger delete-dossier-btn" 
+                                data-dossier-id="{{ dossier.id }}" 
+                                data-dossier-naam="{{ dossier.naam }}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="badge bg-primary">{{ dossier.taxaties|length }} taxaties</span>
+                    <span class="badge bg-secondary">{{ dossier.documents|length }} documenten</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+    <div class="alert alert-info" id="noDossiersMessage">
+    <i class="bi bi-info-circle"></i> U heeft nog geen dossiers. 
+    <a href="{{ url_for('nieuw_dossier') }}" class="alert-link">Maak uw eerste dossier aan</a>.
+</div>
+{% endif %}
+</div>
+
+<!-- No Search Results -->
+<div id="noSearchResults" class="alert alert-warning d-none">
+    <i class="bi bi-exclamation-triangle"></i> 
+    Geen dossiers gevonden voor uw zoekopdracht.
+    <button type="button" class="btn btn-sm btn-outline-warning ms-2" id="clearSearchBtn2">Zoekopdracht wissen</button>
+</div>
+
+<!-- Delete Dossier Modal -->
+<div class="modal fade" id="deleteDossierModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Dossier Verwijderen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Weet u zeker dat u het dossier "<span id="dossierNaam"></span>" wilt verwijderen?</p>
+                <p class="text-danger"><small>Deze actie kan niet ongedaan worden gemaakt.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuleren</button>
+                <form id="deleteDossierForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Verwijderen</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let searchTimeout;
+let currentSearchQuery = '';
+let currentFilter = 'all';
+let currentSort = 'created_date_desc';
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Dossiers page JavaScript loaded');
+    
+    // Search functionality
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const filterSelect = document.getElementById('filterSelect');
+    const sortSelect = document.getElementById('sortSelect');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
+    const clearSearchBtn2 = document.getElementById('clearSearchBtn2');
+    
+    // Real-time search with debouncing
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            performSearch();
+        }, 300);
+    });
+    
+    // Search button click
+    searchBtn.addEventListener('click', performSearch);
+    
+    // Filter and sort changes
+    filterSelect.addEventListener('change', function() {
+        currentFilter = this.value;
+        if (currentSearchQuery) {
+            performSearch();
+        }
+    });
+    
+    sortSelect.addEventListener('change', function() {
+        currentSort = this.value;
+        if (currentSearchQuery) {
+            performSearch();
+        }
+    });
+    
+    // Clear search
+    clearSearchBtn.addEventListener('click', clearSearch);
+    clearSearchBtn2.addEventListener('click', clearSearch);
+    
+    function performSearch() {
+        const query = searchInput.value.trim();
+        currentSearchQuery = query;
+        
+        if (!query) {
+            clearSearch();
+            return;
+        }
+        
+        showLoading(true);
+        
+        const params = new URLSearchParams({
+            q: query,
+            filter: currentFilter,
+            sort: currentSort
+        });
+        
+        fetch(`/api/dossiers/search?${params.toString()}`)
+            .then(response => response.json())
+            .then(data => {
+                showLoading(false);
+                if (data.success) {
+                    displaySearchResults(data);
+                } else {
+                    showError('Fout bij zoeken: ' + (data.error || 'Onbekende fout'));
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                showError('Fout bij zoeken: ' + error.message);
+            });
+    }
+    
+    function displaySearchResults(data) {
+        const container = document.getElementById('dossiersContainer');
+        const noSearchResults = document.getElementById('noSearchResults');
+        const noDossiersMessage = document.getElementById('noDossiersMessage');
+        
+        if (data.count === 0) {
+            container.style.display = 'none';
+            noSearchResults.classList.remove('d-none');
+            noDossiersMessage.classList.add('d-none');
+            showSearchInfo(`Geen resultaten gevonden voor "${data.query}"`);
+        } else {
+            container.style.display = 'block';
+            noSearchResults.classList.add('d-none');
+            noDossiersMessage.classList.add('d-none');
+            
+            const grid = document.getElementById('dossiersGrid');
+            if (grid) {
+                grid.innerHTML = '';
+                
+                data.results.forEach(dossier => {
+                    const dossierHtml = `
+                        <div class="col-md-6 col-lg-4 mb-4 dossier-item" data-dossier-url="${dossier.detail_url}">
+                            <div class="card h-100 dossier-card" style="cursor: pointer;">
+                                <div class="card-body">
+                                    <h5 class="card-title">${highlightSearchTerm(dossier.naam, data.query)}</h5>
+                                    <p class="card-text">
+                                        <i class="bi bi-geo-alt"></i> ${highlightSearchTerm(dossier.adres, data.query)}<br>
+                                        ${highlightSearchTerm(dossier.postcode, data.query)} ${highlightSearchTerm(dossier.plaats, data.query)}
+                                    </p>
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">
+                                            <i class="bi bi-calendar"></i> ${dossier.created_at}
+                                        </small>
+                                        <div class="btn-group">
+                                            <a href="${dossier.detail_url}" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-eye"></i> Details
+                                            </a>
+                                            ${dossier.taxatie_count === 0 ? `
+                                            <button type="button" class="btn btn-sm btn-outline-danger delete-dossier-btn" 
+                                                    data-dossier-id="${dossier.id}" 
+                                                    data-dossier-naam="${dossier.naam}">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                            ` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-footer bg-transparent">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <span class="badge bg-primary">${dossier.taxatie_count} taxaties</span>
+                                        <span class="badge bg-secondary">${dossier.document_count} documenten</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    grid.innerHTML += dossierHtml;
+                });
+                
+                // Re-attach event listeners
+                attachDossierCardListeners();
+                attachDeleteButtonListeners();
+            }
+            
+            showSearchInfo(`${data.count} resultaat${data.count !== 1 ? 'en' : ''} gevonden voor "${data.query}"`);
+        }
+    }
+    
+    function highlightSearchTerm(text, query) {
+        if (!query || !text) return text;
+        const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return text.replace(regex, '<mark>$1</mark>');
+    }
+    
+    function clearSearch() {
+        searchInput.value = '';
+        currentSearchQuery = '';
+        document.getElementById('dossiersContainer').style.display = 'block';
+        document.getElementById('noSearchResults').classList.add('d-none');
+        document.getElementById('noDossiersMessage').classList.remove('d-none');
+        document.getElementById('searchInfo').classList.add('d-none');
+        
+        // Reload the page to show all dossiers
+        window.location.reload();
+    }
+    
+    function showLoading(show) {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        if (show) {
+            loadingIndicator.classList.remove('d-none');
+        } else {
+            loadingIndicator.classList.add('d-none');
+        }
+    }
+    
+    function showSearchInfo(message) {
+        const searchInfo = document.getElementById('searchInfo');
+        const searchInfoText = document.getElementById('searchInfoText');
+        searchInfoText.textContent = message;
+        searchInfo.classList.remove('d-none');
+    }
+    
+    function showError(message) {
+        const searchInfo = document.getElementById('searchInfo');
+        const searchInfoText = document.getElementById('searchInfoText');
+        searchInfoText.textContent = message;
+        searchInfo.classList.remove('d-none');
+        searchInfo.classList.remove('alert-info');
+        searchInfo.classList.add('alert-danger');
+    }
+    
+    // Make dossier cards clickable
+    function attachDossierCardListeners() {
+    document.querySelectorAll('.dossier-card').forEach(function(card) {
+        card.addEventListener('click', function(e) {
+            // Don't navigate if clicking on a button or link
+            if (e.target.tagName === 'A' || e.target.tagName === 'BUTTON' || e.target.closest('a') || e.target.closest('button')) {
+                return;
+            }
+                const url = this.closest('.dossier-item').getAttribute('data-dossier-url');
+            if (url) {
+                window.location.href = url;
+            }
+        });
+    });
+    }
+    
+    // Handle delete dossier buttons
+    function attachDeleteButtonListeners() {
+    const deleteButtons = document.querySelectorAll('.delete-dossier-btn');
+    deleteButtons.forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const dossierId = this.getAttribute('data-dossier-id');
+            const dossierNaam = this.getAttribute('data-dossier-naam');
+                
+            // Set modal content
+            document.getElementById('dossierNaam').textContent = dossierNaam;
+            document.getElementById('deleteDossierForm').action = '/dossier/' + dossierId + '/verwijderen';
+                
+            // Show modal
+            try {
+                const modalElement = document.getElementById('deleteDossierModal');
+                if (modalElement) {
+                    const modal = new bootstrap.Modal(modalElement);
+                    modal.show();
+                } else {
+                    console.error('Modal element not found!');
+                    alert('Modal niet gevonden - technische fout');
+                }
+            } catch (error) {
+                console.error('Error creating/showing modal:', error);
+                alert('Fout bij tonen modal: ' + error.message);
+            }
+        });
+    });
+    }
+    
+    // Initial setup
+    attachDossierCardListeners();
+    attachDeleteButtonListeners();
+});
+</script>
+{% endblock %} 

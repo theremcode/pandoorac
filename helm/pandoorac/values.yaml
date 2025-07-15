@@ -1,0 +1,54 @@
+# Default values for pandoorac
+app:
+  image: acrtheremcode.azurecr.io/pandoorac:latest
+  replicaCount: 1
+  port: 5001  # Flask app port
+
+ingress:
+  enabled: true
+  hostname: pandoorac.theremcode.nl
+  className: traefik
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.tls.certresolver: letsencrypt
+
+postgresql:
+  enabled: true
+  image: postgres:14
+  database: pandoorac
+  username: pandoorac
+  password: pandoorac123
+  storageClass: managed-premium
+  storageSize: 10Gi
+
+redis:
+  enabled: true
+  image: redis:7-alpine
+  storageClass: managed-premium
+  storageSize: 5Gi
+
+minio:
+  enabled: true
+  image: minio/minio:latest
+  accessKey: minioadmin
+  secretKey: minioadmin123
+  storageClass: azure-storage
+  storageSize: 20Gi
+
+backup:
+  enabled: true  # Enable backup now that basic deployment is working
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  retention: 7  # Keep 7 days of backups
+  storageClass: azure-storage
+  storageSize: 10Gi
+
+nodePlacement:
+  enabled: true
+  nodeSelector:
+    workload: production
+  tolerations:
+    - key: workload
+      operator: Equal
+      value: app
+      effect: NoSchedule 

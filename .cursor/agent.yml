@@ -1,0 +1,1428 @@
+name: pandoorac
+description: A Flask-based property valuation application with simplified Helm-only Kubernetes deployment
+
+# Global configuration
+config:
+  model: auto
+  temperature: 0.7
+  max_tokens: 2000
+  stop_sequences: []
+  auto_track_features: true  # Enable automatic feature tracking
+
+# Task definitions
+tasks:
+  - name: code_review
+    description: Review code changes and provide feedback
+    model: auto
+    temperature: 0.3
+    max_tokens: 1000
+    prompt_template: |
+      Please review the following code changes:
+      {{code_changes}}
+      
+      Provide feedback on:
+      1. Code quality
+      2. Potential bugs
+      3. Security concerns
+      4. Performance improvements
+      5. Best practices
+
+  - name: code_generation
+    description: Generate code based on requirements
+    model: auto
+    temperature: 0.7
+    max_tokens: 2000
+    prompt_template: |
+      Please generate code for the following requirements:
+      {{requirements}}
+      
+      Consider:
+      1. Clean code principles
+      2. Error handling
+      3. Documentation
+      4. Testing
+
+  - name: bug_fix
+    description: Fix bugs in existing code
+    model: auto
+    temperature: 0.2
+    max_tokens: 1500
+    prompt_template: |
+      Please help fix the following bug:
+      {{bug_description}}
+      
+      Code context:
+      {{code_context}}
+      
+      Provide:
+      1. Root cause analysis
+      2. Fix implementation
+      3. Test cases
+
+  - name: feature_tracking
+    description: Track and update implemented features
+    model: auto
+    temperature: 0.2
+    max_tokens: 1000
+    prompt_template: |
+      Analyze the codebase and update the feature list:
+      {{codebase_analysis}}
+      
+      Update:
+      1. Implemented features
+      2. Feature status
+      3. Configuration requirements
+      4. Deployment architecture (Helm-only)
+      5. Environment-specific configurations
+
+  - name: deployment_management
+    description: Manage Helm-based Kubernetes deployment
+    model: auto
+    temperature: 0.2
+    max_tokens: 1500
+    prompt_template: |
+      Deployment Management for Pandoorac:
+      
+      Current deployment architecture: Helm-only Kubernetes deployment
+      
+      Configuration files:
+      - Base Helm values: deployment/pandoorac/values.yaml
+      - Environment config: config.yaml
+      - Generated values: deployment/pandoorac/values-{environment}.yaml
+      - Deployment script: deploy.sh
+      - Config merger: merge-config.py
+      
+      Available environments: development, staging, production
+      
+      Deployment actions:
+      - deploy: Full deployment with Docker image build
+      - deploy-no-build: Deploy without building image
+      - check: Check deployment status
+      - cleanup: Remove deployment and cleanup
+      - debug: Show detailed logs and debugging info
+      
+      Provide guidance on:
+      1. Environment configuration
+      2. Deployment process
+      3. Troubleshooting
+      4. Best practices
+
+# Custom commands
+commands:
+  - name: analyze
+    description: Analyze code for potential issues
+    task: code_review
+    parameters:
+      - name: file_path
+        type: string
+        required: true
+      - name: severity
+        type: string
+        enum: [low, medium, high]
+        default: medium
+      - name: deployment_check
+        type: boolean
+        description: Check for deployment-related issues (Helm, Kubernetes)
+        default: true
+
+  - name: deploy
+    description: Manage Helm-based Kubernetes deployment
+    task: deployment_management
+    parameters:
+      - name: environment
+        type: string
+        enum: [development, staging, production]
+        required: true
+      - name: action
+        type: string
+        enum: [deploy, deploy-no-build, check, cleanup, debug]
+        required: true
+      - name: force_redeploy
+        type: boolean
+        description: Force redeploy by deleting existing release first
+        default: false
+      - name: interactive
+        type: boolean
+        description: Use interactive deployment menu
+        default: false
+
+  - name: generate
+    description: Generate new code
+    task: code_generation
+    parameters:
+      - name: language
+        type: string
+        enum: [python]
+        required: true
+      - name: framework
+        type: string
+        enum: [flask]
+        required: true
+      - name: deployment
+        type: object
+        properties:
+          docker:
+            type: boolean
+            required: true
+          local_development:
+            type: boolean
+            required: true
+          kubernetes:
+            type: object
+            properties:
+              helm_only:
+                type: boolean
+                description: Use simplified Helm-only deployment without Terraform
+                required: true
+              environment_config:
+                type: object
+                properties:
+                  config_yaml:
+                    type: boolean
+                    description: Use config.yaml for environment-specific settings
+                    required: true
+                  auto_merge:
+                    type: boolean
+                    description: Automatically merge base values with environment config
+                    required: true
+                  generated_values:
+                    type: boolean
+                    description: Generate environment-specific values files
+                    required: true
+                required: true
+              deployment_script:
+                type: object
+                properties:
+                  interactive_menu:
+                    type: boolean
+                    description: Interactive deployment menu with environment selection
+                    required: true
+                  command_line:
+                    type: boolean
+                    description: Direct command line deployment support
+                    required: true
+                  force_redeploy:
+                    type: boolean
+                    description: Support force redeploy options
+                    required: true
+                required: true
+            required: true
+      - name: database
+        type: object
+        properties:
+          type:
+            type: string
+            enum: [postgresql]
+            required: true
+          docker:
+            type: boolean
+            required: true
+          auto_init:
+            type: boolean
+            required: true
+          store_users:
+            type: boolean
+            required: true
+          store_valuations:
+            type: boolean
+            required: true
+          store_dossiers:
+            type: boolean
+            required: true
+      - name: storage
+        type: object
+        properties:
+          type:
+            type: string
+            enum: [minio]
+            required: true
+          object_storage:
+            type: boolean
+            required: true
+          store_documents:
+            type: boolean
+            required: true
+          store_photos:
+            type: boolean
+            required: true
+      - name: features
+        type: object
+        properties:
+          pages:
+            type: array
+            items:
+              type: string
+              enum: [nieuwe_taxatie, dossiers, admin, profiel, bewerk_taxatie]
+            required: true
+          modern_ui:
+            type: boolean
+            required: true
+          authentication:
+            type: boolean
+            required: true
+          file_upload:
+            type: boolean
+            required: true
+          valuation_management:
+            type: object
+            properties:
+              dossier_integration:
+                type: boolean
+                description: Valuations can be stored and managed within dossiers
+                required: true
+              status_system:
+                type: object
+                properties:
+                  status_types:
+                    type: array
+                    items:
+                      type: string
+                      enum: [concept, definitief, gearchiveerd]
+                    required: true
+                  edit_restrictions:
+                    type: boolean
+                    description: Valuations with "definitief" status cannot be edited unless status is changed first
+                    required: true
+                  status_change_required:
+                    type: boolean
+                    description: Users must change status from "definitief" before editing
+                    required: true
+                  status_history:
+                    type: boolean
+                    description: Track status changes with timestamps and user information
+                    required: true
+                required: true
+              editing_features:
+                type: object
+                properties:
+                  inline_editing:
+                    type: boolean
+                    description: Edit valuations directly within dossier view
+                    required: true
+                  validation_rules:
+                    type: boolean
+                    description: Validate changes based on current status
+                    required: true
+                  confirmation_dialogs:
+                    type: boolean
+                    description: Show confirmation when changing status or editing definitief valuations
+                    required: true
+                required: true
+              details_view_integration:
+                type: object
+                properties:
+                  default_details_view:
+                    type: boolean
+                    description: Details view is the default view when clicking on a dossier record
+                    required: true
+                  integrated_taxatie_creation:
+                    type: boolean
+                    description: Taxatie creation card is available in the details view
+                    required: true
+                  property_details_visibility:
+                    type: boolean
+                    description: All property details remain visible when creating taxaties in details view
+                    required: true
+                  seamless_workflow:
+                    type: boolean
+                    description: Users can create taxaties without losing context of property information
+                    required: true
+                required: true
+              automatic_calculation:
+                type: object
+                properties:
+                  calculation_based_on_function:
+                    type: boolean
+                    description: Automatic calculation based on property function (woonfunctie = m³, other = m²)
+                    required: true
+                  height_input_field:
+                    type: object
+                    properties:
+                      required_for_woonfunctie:
+                        type: boolean
+                        description: Height input field required for residential properties
+                        required: true
+                      default_value:
+                        type: number
+                        description: Default height value in meters (2.6m)
+                        required: true
+                      free_input:
+                        type: boolean
+                        description: Height field is freely editable
+                        required: true
+                    required: true
+                  price_input_fields:
+                    type: object
+                    properties:
+                      price_per_m2:
+                        type: boolean
+                        description: Input field for price per square meter
+                        required: true
+                      price_per_m3:
+                        type: boolean
+                        description: Input field for price per cubic meter
+                        required: true
+                      free_input:
+                        type: boolean
+                        description: Price fields are freely editable
+                        required: true
+                    required: true
+                  calculation_button:
+                    type: boolean
+                    description: Calculate button to perform automatic calculation
+                    required: true
+                  result_display:
+                    type: object
+                    properties:
+                      euro_format:
+                        type: boolean
+                        description: Calculation result displayed in euros
+                        required: true
+                      real_time_update:
+                        type: boolean
+                        description: Result updates automatically when inputs change
+                        required: true
+                    required: true
+                  auto_save_as_concept:
+                    type: boolean
+                    description: Taxatie automatically saved as concept status in dossier
+                    required: true
+                required: true
+              woz_value_integration:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    description: Enable WOZ value integration for residential properties
+                    required: true
+                  api_integration:
+                    type: object
+                    properties:
+                      wozwaardeloket_api:
+                        type: object
+                        properties:
+                          base_url:
+                            type: string
+                            description: Base URL for WOZ waardeloket API
+                            default: https://www.wozwaardeloket.nl/wozwaardeloket-api/v1
+                          session_management:
+                            type: boolean
+                            description: Handle session cookies and authentication for WOZ API
+                            required: true
+                          geodata_integration:
+                            type: object
+                            properties:
+                              locatieserver_url:
+                                type: string
+                                description: URL for geodata locatieserver
+                                default: https://geodata.nationaalgeoregister.nl/locatieserver/v3
+                              suggest_endpoint:
+                                type: boolean
+                                description: Use suggest endpoint to find address ID
+                                required: true
+                              lookup_endpoint:
+                                type: boolean
+                                description: Use lookup endpoint to get address identification
+                                required: true
+                            required: true
+                        required: true
+                      bag_integration:
+                        type: object
+                        properties:
+                          automatic_trigger:
+                            type: boolean
+                            description: Automatically trigger WOZ lookup when BAG address is retrieved
+                            required: true
+                          address_validation:
+                            type: boolean
+                            description: Validate address format before WOZ API call
+                            required: true
+                        required: true
+                    required: true
+                  database_storage:
+                    type: object
+                    properties:
+                      woz_data_table:
+                        type: object
+                        properties:
+                          table_name:
+                            type: string
+                            description: Database table name for WOZ data
+                            default: woz_data
+                          fields:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                name:
+                                  type: string
+                                  required: true
+                                type:
+                                  type: string
+                                  required: true
+                                description:
+                                  type: string
+                                  required: true
+                            required: true
+                          woz_object_fields:
+                            type: array
+                            items:
+                              type: string
+                              enum: [wozobjectnummer, woonplaatsnaam, openbareruimtenaam, straatnaam, postcode, huisnummer, huisletter, huisnummertoevoeging, gemeentecode, grondoppervlakte, adresseerbaarobjectid, nummeraanduidingid]
+                            required: true
+                          woz_waarden_fields:
+                            type: array
+                            items:
+                              type: string
+                              enum: [peildatum, vastgesteldeWaarde]
+                            required: true
+                          kadastrale_objecten_fields:
+                            type: array
+                            items:
+                              type: string
+                              enum: [kadastraleGemeenteCode, kadastraleSectie, kadastraalPerceelNummer]
+                            required: true
+                        required: true
+                      dossier_relation:
+                        type: boolean
+                        description: Link WOZ data to dossier records
+                        required: true
+                      taxatie_relation:
+                        type: boolean
+                        description: Link WOZ data to taxatie records for comparison
+                        required: true
+                    required: true
+                  ui_components:
+                    type: object
+                    properties:
+                      dossier_form_card:
+                        type: object
+                        properties:
+                          display_name:
+                            type: string
+                            description: Card title for WOZ value display
+                            default: WOZ Waarde Informatie
+                          position:
+                            type: string
+                            enum: [after_address, after_property_details, separate_section]
+                            description: Position of WOZ card in dossier form
+                            required: true
+                          conditional_display:
+                            type: boolean
+                            description: Only show for properties with woonfunctie
+                            required: true
+                          data_display:
+                            type: object
+                            properties:
+                              current_woz_value:
+                                type: boolean
+                                description: Display most recent WOZ value
+                                required: true
+                              value_history:
+                                type: boolean
+                                description: Show WOZ value history over years
+                                required: true
+                              kadastrale_info:
+                                type: boolean
+                                description: Display kadastrale object information
+                                required: true
+                              grondoppervlakte:
+                                type: boolean
+                                description: Show ground surface area from WOZ data
+                                required: true
+                            required: true
+                        required: true
+                      taxatie_form_card:
+                        type: object
+                        properties:
+                          display_name:
+                            type: string
+                            description: Card title for WOZ comparison
+                            default: WOZ Waarde Vergelijking
+                          position:
+                            type: string
+                            enum: [after_calculation, before_calculation, separate_section]
+                            description: Position of WOZ card in taxatie form
+                            required: true
+                          comparison_features:
+                            type: object
+                            properties:
+                              woz_vs_taxatie:
+                                type: boolean
+                                description: Compare WOZ value with calculated taxatie value
+                                required: true
+                              percentage_difference:
+                                type: boolean
+                                description: Show percentage difference between WOZ and taxatie
+                                required: true
+                              visual_indicator:
+                                type: boolean
+                                description: Color-coded indicators for value differences
+                                required: true
+                            required: true
+                        required: true
+                      loading_states:
+                        type: object
+                        properties:
+                          api_call_indicator:
+                            type: boolean
+                            description: Show loading indicator during WOZ API calls
+                            required: true
+                          error_handling:
+                            type: boolean
+                            description: Display user-friendly error messages for API failures
+                            required: true
+                          fallback_display:
+                            type: boolean
+                            description: Show alternative content when WOZ data unavailable
+                            required: true
+                        required: true
+                    required: true
+                  api_workflow:
+                    type: object
+                    properties:
+                      session_handling:
+                        type: object
+                        properties:
+                          cookie_management:
+                            type: boolean
+                            description: Handle awaf-sid, session-id, and lb-sticky cookies
+                            required: true
+                          session_start:
+                            type: boolean
+                            description: Call session/start endpoint to initialize session
+                            required: true
+                        required: true
+                      address_lookup_flow:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            step:
+                              type: string
+                              required: true
+                            endpoint:
+                              type: string
+                              required: true
+                            description:
+                              type: string
+                              required: true
+                        required: true
+                      woz_data_retrieval:
+                        type: object
+                        properties:
+                          wozobjectnummer_lookup:
+                            type: boolean
+                            description: Use wozobjectnummer for final WOZ data retrieval
+                            required: true
+                          data_parsing:
+                            type: boolean
+                            description: Parse and validate WOZ API response data
+                            required: true
+                          error_recovery:
+                            type: boolean
+                            description: Implement retry logic for failed API calls
+                            required: true
+                        required: true
+                    required: true
+                required: true
+              search_functionality:
+                type: object
+                properties:
+                  dossier_search:
+                    type: object
+                    properties:
+                      search_interface:
+                        type: object
+                        properties:
+                          search_bar:
+                            type: boolean
+                            description: Search bar in dossier overview page
+                            required: true
+                          advanced_search:
+                            type: boolean
+                            description: Advanced search with multiple criteria
+                            required: true
+                          search_filters:
+                            type: array
+                            items:
+                              type: string
+                              enum: [naam, adres, postcode, plaats, bouwjaar, gebruiksdoel, created_date, user]
+                            description: Available search filters
+                            required: true
+                        required: true
+                      search_results:
+                        type: object
+                        properties:
+                          real_time_search:
+                            type: boolean
+                            description: Search results update as user types
+                            required: true
+                          result_highlighting:
+                            type: boolean
+                            description: Highlight matching search terms in results
+                            required: true
+                          result_sorting:
+                            type: array
+                            items:
+                              type: string
+                              enum: [naam_asc, naam_desc, adres_asc, adres_desc, created_date_asc, created_date_desc]
+                            description: Available sorting options
+                            required: true
+                          pagination:
+                            type: boolean
+                            description: Paginate search results for large datasets
+                            required: true
+                        required: true
+                      search_api:
+                        type: object
+                        properties:
+                          endpoint:
+                            type: string
+                            description: API endpoint for dossier search
+                            default: /api/dossiers/search
+                          search_methods:
+                            type: array
+                            items:
+                              type: string
+                              enum: [full_text, exact_match, partial_match, fuzzy_search]
+                            description: Available search methods
+                            required: true
+                          response_format:
+                            type: object
+                            properties:
+                              json_response:
+                                type: boolean
+                                description: Return search results as JSON
+                                required: true
+                              result_count:
+                                type: boolean
+                                description: Include total result count in response
+                                required: true
+                              result_metadata:
+                                type: boolean
+                                description: Include metadata like search time, filters applied
+                                required: true
+                            required: true
+                        required: true
+                    required: true
+                  duplicate_detection:
+                    type: object
+                    properties:
+                      detection_criteria:
+                        type: object
+                        properties:
+                          primary_key:
+                            type: object
+                            properties:
+                              postcode:
+                                type: boolean
+                                description: Postcode is required for duplicate detection
+                                required: true
+                              huisnummer:
+                                type: boolean
+                                description: House number is required for duplicate detection
+                                required: true
+                              huisletter_toevoeging:
+                                type: boolean
+                                description: House letter/addition is optional for duplicate detection
+                                required: true
+                            required: true
+                          fuzzy_matching:
+                            type: object
+                            properties:
+                              postcode_normalization:
+                                type: boolean
+                                description: Normalize postcode format (remove spaces, uppercase)
+                                required: true
+                              huisnummer_normalization:
+                                type: boolean
+                                description: Normalize house number (remove leading zeros, handle ranges)
+                                required: true
+                              huisletter_normalization:
+                                type: boolean
+                                description: Normalize house letter (uppercase, handle special characters)
+                                required: true
+                            required: true
+                        required: true
+                      detection_workflow:
+                        type: object
+                        properties:
+                          automatic_check:
+                            type: boolean
+                            description: Automatically check for duplicates during dossier creation
+                            required: true
+                          manual_check:
+                            type: boolean
+                            description: Allow manual duplicate check via search
+                            required: true
+                          check_timing:
+                            type: string
+                            enum: [on_address_input, on_form_submit, on_bag_lookup]
+                            description: When to perform duplicate detection
+                            required: true
+                        required: true
+                      user_notification:
+                        type: object
+                        properties:
+                          notification_types:
+                            type: array
+                            items:
+                              type: string
+                              enum: [warning, info, error]
+                            description: Types of notifications for duplicate detection
+                            required: true
+                          notification_content:
+                            type: object
+                            properties:
+                              duplicate_found_message:
+                                type: string
+                                description: Message shown when duplicate is found
+                                default: "Er bestaat al een dossier voor dit adres"
+                                required: true
+                              existing_dossier_info:
+                                type: boolean
+                                description: Show information about existing dossier
+                                required: true
+                              navigation_option:
+                                type: boolean
+                                description: Provide option to navigate to existing dossier
+                                required: true
+                            required: true
+                          notification_ui:
+                            type: object
+                            properties:
+                              modal_dialog:
+                                type: boolean
+                                description: Show duplicate notification in modal dialog
+                                required: true
+                              inline_notification:
+                                type: boolean
+                                description: Show notification inline in form
+                                required: true
+                              dismissible:
+                                type: boolean
+                                description: Allow user to dismiss duplicate notification
+                                required: true
+                            required: true
+                        required: true
+                      navigation_integration:
+                        type: object
+                        properties:
+                          direct_navigation:
+                            type: boolean
+                            description: Provide direct link to existing dossier
+                            required: true
+                          navigation_methods:
+                            type: array
+                            items:
+                              type: string
+                              enum: [button_click, automatic_redirect, new_tab]
+                            description: Methods to navigate to existing dossier
+                            required: true
+                          navigation_confirmation:
+                            type: boolean
+                            description: Ask for confirmation before navigating away
+                            required: true
+                        required: true
+                      database_optimization:
+                        type: object
+                        properties:
+                          indexing:
+                            type: object
+                            properties:
+                              composite_index:
+                                type: boolean
+                                description: Create composite index on postcode, huisnummer, huisletter_toevoeging
+                                required: true
+                              full_text_index:
+                                type: boolean
+                                description: Create full-text index for search functionality
+                                required: true
+                            required: true
+                          query_optimization:
+                            type: object
+                            properties:
+                              efficient_queries:
+                                type: boolean
+                                description: Use optimized queries for duplicate detection
+                                required: true
+                              caching:
+                                type: boolean
+                                description: Cache search results for better performance
+                                required: true
+                            required: true
+                        required: true
+                    required: true
+                  map_visualization:
+                    type: object
+                    properties:
+                      bag_geodata_integration:
+                        type: object
+                        properties:
+                          geodata_sources:
+                            type: object
+                            properties:
+                              centroide_ll:
+                                type: boolean
+                                description: Use latitude/longitude coordinates from BAG data
+                                required: true
+                              centroide_rd:
+                                type: boolean
+                                description: Use Dutch RD (Rijksdriehoek) coordinates from BAG data
+                                required: true
+                              geometrie:
+                                type: boolean
+                                description: Use building geometry/polygon data from BAG data
+                                required: true
+                            required: true
+                          coordinate_systems:
+                            type: object
+                            properties:
+                              wgs84:
+                                type: boolean
+                                description: Support WGS84 (latitude/longitude) coordinate system
+                                required: true
+                              epsg_28992:
+                                type: boolean
+                                description: Support Dutch RD coordinate system (EPSG:28992)
+                                required: true
+                              coordinate_conversion:
+                                type: boolean
+                                description: Convert between coordinate systems when needed
+                                required: true
+                            required: true
+                          data_storage:
+                            type: object
+                            properties:
+                              geodata_fields:
+                                type: array
+                                items:
+                                  type: string
+                                  enum: [centroide_ll, centroide_rd, geometrie, latitude, longitude, x_coord, y_coord]
+                                description: Database fields for storing geodata
+                                required: true
+                              bag_data_integration:
+                                type: boolean
+                                description: Store geodata in BAG data table
+                                required: true
+                              api_response_storage:
+                                type: boolean
+                                description: Store full BAG API response including geodata
+                                required: true
+                            required: true
+                        required: true
+                      map_providers:
+                        type: object
+                        properties:
+                          openstreetmap:
+                            type: object
+                            properties:
+                              enabled:
+                                type: boolean
+                                description: Use OpenStreetMap as map provider
+                                required: true
+                              tile_server:
+                                type: string
+                                description: OpenStreetMap tile server URL
+                                default: https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png
+                              attribution:
+                                type: string
+                                description: Map attribution text
+                                default: © OpenStreetMap contributors
+                            required: true
+                          google_maps:
+                            type: object
+                            properties:
+                              enabled:
+                                type: boolean
+                                description: Use Google Maps as map provider
+                                required: true
+                              api_key:
+                                type: boolean
+                                description: Require Google Maps API key
+                                required: true
+                              map_types:
+                                type: array
+                                items:
+                                  type: string
+                                  enum: [roadmap, satellite, hybrid, terrain]
+                                description: Available Google Maps types
+                                required: true
+                            required: true
+                          bing_maps:
+                            type: object
+                            properties:
+                              enabled:
+                                type: boolean
+                                description: Use Bing Maps as map provider
+                                required: true
+                              api_key:
+                                type: boolean
+                                description: Require Bing Maps API key
+                                required: true
+                              map_types:
+                                type: array
+                                items:
+                                  type: string
+                                  enum: [road, aerial, aerialWithLabels]
+                                description: Available Bing Maps types
+                                required: true
+                            required: true
+                        required: true
+                      map_components:
+                        type: object
+                        properties:
+                          dossier_detail_map:
+                            type: object
+                            properties:
+                              display_location:
+                                type: string
+                                enum: [after_address, after_bag_data, separate_card, sidebar]
+                                description: Where to display the map in dossier detail view
+                                required: true
+                              map_size:
+                                type: object
+                                properties:
+                                  width:
+                                    type: string
+                                    description: Map width (CSS value)
+                                    default: 100%
+                                  height:
+                                    type: string
+                                    description: Map height (CSS value)
+                                    default: 400px
+                                  responsive:
+                                    type: boolean
+                                    description: Make map responsive to screen size
+                                    required: true
+                                required: true
+                              map_features:
+                                type: object
+                                properties:
+                                  zoom_controls:
+                                    type: boolean
+                                    description: Show zoom in/out controls
+                                    required: true
+                                  fullscreen:
+                                    type: boolean
+                                    description: Allow fullscreen map view
+                                    required: true
+                                  street_view:
+                                    type: boolean
+                                    description: Enable street view integration
+                                    required: true
+                                  satellite_view:
+                                    type: boolean
+                                    description: Allow switching to satellite view
+                                    required: true
+                                required: true
+                            required: true
+                          property_marker:
+                            type: object
+                            properties:
+                              marker_type:
+                                type: string
+                                enum: [default, custom, building_outline]
+                                description: Type of marker to show property location
+                                required: true
+                              marker_style:
+                                type: object
+                                properties:
+                                  color:
+                                    type: string
+                                    description: Marker color
+                                    default: #ff4444
+                                  size:
+                                    type: string
+                                    description: Marker size
+                                    default: medium
+                                  icon:
+                                    type: string
+                                    description: Custom marker icon
+                                    default: house
+                                required: true
+                              popup_content:
+                                type: object
+                                properties:
+                                  show_address:
+                                    type: boolean
+                                    description: Show address in marker popup
+                                    required: true
+                                  show_property_info:
+                                    type: boolean
+                                    description: Show basic property information
+                                    required: true
+                                  show_actions:
+                                    type: boolean
+                                    description: Show action buttons in popup
+                                    required: true
+                                required: true
+                            required: true
+                          building_outline:
+                            type: object
+                            properties:
+                              enabled:
+                                type: boolean
+                                description: Show building outline/polygon on map
+                                required: true
+                              outline_style:
+                                type: object
+                                properties:
+                                  color:
+                                    type: string
+                                    description: Outline color
+                                    default: #0066cc
+                                  weight:
+                                    type: number
+                                    description: Outline thickness
+                                    default: 2
+                                  opacity:
+                                    type: number
+                                    description: Outline opacity (0-1)
+                                    default: 0.8
+                                  fill_color:
+                                    type: string
+                                    description: Fill color
+                                    default: #0066cc
+                                  fill_opacity:
+                                    type: number
+                                    description: Fill opacity (0-1)
+                                    default: 0.2
+                                required: true
+                            required: true
+                        required: true
+                      map_interactions:
+                        type: object
+                        properties:
+                          user_interactions:
+                            type: object
+                            properties:
+                              pan:
+                                type: boolean
+                                description: Allow map panning
+                                required: true
+                              zoom:
+                                type: boolean
+                                description: Allow map zooming
+                                required: true
+                              click:
+                                type: boolean
+                                description: Handle map clicks
+                                required: true
+                              hover:
+                                type: boolean
+                                description: Handle mouse hover events
+                                required: true
+                            required: true
+                          context_menu:
+                            type: object
+                            properties:
+                              enabled:
+                                type: boolean
+                                description: Show context menu on right-click
+                                required: true
+                              menu_items:
+                                type: array
+                                items:
+                                  type: string
+                                  enum: [center_map, zoom_to_building, get_directions, street_view, copy_coordinates]
+                                description: Available context menu items
+                                required: true
+                            required: true
+                          external_integration:
+                            type: object
+                            properties:
+                              directions:
+                                type: boolean
+                                description: Integrate with external directions services
+                                required: true
+                              street_view:
+                                type: boolean
+                                description: Integrate with street view services
+                                required: true
+                              nearby_amenities:
+                                type: boolean
+                                description: Show nearby amenities and services
+                                required: true
+                            required: true
+                        required: true
+                      map_configuration:
+                        type: object
+                        properties:
+                          default_settings:
+                            type: object
+                            properties:
+                              zoom_level:
+                                type: number
+                                description: Default map zoom level
+                                default: 18
+                              center_coordinates:
+                                type: object
+                                properties:
+                                  latitude:
+                                    type: number
+                                    description: Default center latitude
+                                    default: 52.3676
+                                  longitude:
+                                    type: number
+                                    description: Default center longitude
+                                    default: 4.9041
+                                required: true
+                              map_type:
+                                type: string
+                                enum: [roadmap, satellite, hybrid, terrain]
+                                description: Default map type
+                                default: roadmap
+                            required: true
+                          performance_optimization:
+                            type: object
+                            properties:
+                              lazy_loading:
+                                type: boolean
+                                description: Load map only when needed
+                                required: true
+                              tile_caching:
+                                type: boolean
+                                description: Cache map tiles for better performance
+                                required: true
+                              viewport_optimization:
+                                type: boolean
+                                description: Only load tiles in current viewport
+                                required: true
+                            required: true
+                          accessibility:
+                            type: object
+                            properties:
+                              keyboard_navigation:
+                                type: boolean
+                                description: Support keyboard navigation
+                                required: true
+                              screen_reader:
+                                type: boolean
+                                description: Support screen readers
+                                required: true
+                              high_contrast:
+                                type: boolean
+                                description: Support high contrast mode
+                                required: true
+                            required: true
+                        required: true
+                    required: true
+
+            required: true
+          user_management:
+            type: object
+            properties:
+              profile_settings:
+                type: boolean
+                required: true
+              password_change:
+                type: boolean
+                required: true
+              email_update:
+                type: boolean
+                required: true
+          admin_features:
+            type: object
+            properties:
+              dashboard_tabs:
+                type: array
+                items:
+                  type: string
+                  enum: [gebruikersbeheer, opslaginstellingen, systeeminstellingen, apiconfiguratie, activiteitenlogboek]
+                required: true
+              user_management:
+                type: boolean
+                required: true
+              registration_control:
+                type: boolean
+                required: true
+              system_settings:
+                type: boolean
+                required: true
+              activity_logs:
+                type: boolean
+                required: true
+              storage_settings:
+                type: object
+                properties:
+                  minio:
+                    type: boolean
+                    required: true
+                  configurable:
+                    type: boolean
+                    required: true
+              api_configuration:
+                type: object
+                properties:
+                  bag_individuele_bevraging:
+                    type: object
+                    properties:
+                      api_url:
+                        type: string
+                        required: true
+                        default: https://api.bag.kadaster.nl/lvbag/individuelebevragingen/v2
+                      api_key:
+                        type: string
+                        required: true
+                    required: true
+                  bag_pdok:
+                    type: object
+                    properties:
+                      api_url:
+                        type: string
+                        required: true
+                        default: https://data.pdok.nl/bag/api/v1/
+                      api_key:
+                        type: string
+                        required: true
+                    required: true
+                  streetsmart:
+                    type: object
+                    properties:
+                      api_url:
+                        type: string
+                        required: true
+                        default: https://developer.cyclomedia.com/our-apis/street-smart/
+                      api_key:
+                        type: string
+                        required: true
+                    required: true
+                  walkscore:
+                    type: object
+                    properties:
+                      api_url:
+                        type: string
+                        required: true
+                        default: https://api.walkscore.com/score?format=json&address=…&lat=…&lon=…&wsapikey=YOUR_API_KEY
+                      api_key:
+                        type: string
+                        required: true
+                    required: true
+                  woz_waardeloket:
+                    type: object
+                    properties:
+                      api_url:
+                        type: string
+                        required: true
+                        default: https://www.wozwaardeloket.nl/wozwaardeloket-api/v1
+                      session_management:
+                        type: boolean
+                        description: Enable session management for WOZ API calls
+                        required: true
+                      geodata_integration:
+                        type: object
+                        properties:
+                          locatieserver_url:
+                            type: string
+                            required: true
+                            default: https://geodata.nationaalgeoregister.nl/locatieserver/v3
+                          suggest_endpoint:
+                            type: string
+                            required: true
+                            default: /suggest
+                          lookup_endpoint:
+                            type: string
+                            required: true
+                            default: /lookup
+                        required: true
+                      workflow_endpoints:
+                        type: object
+                        properties:
+                          session_start:
+                            type: string
+                            required: true
+                            default: /session/start
+                          woz_waarde_by_wozobjectnummer:
+                            type: string
+                            required: true
+                            default: /wozwaarde/wozobjectnummer/{wozobjectnummer}
+                          woz_waarde_by_nummeraanduiding:
+                            type: string
+                            required: true
+                            default: /wozwaarde/nummeraanduiding/{nummeraanduidingid}
+                        required: true
+                      cookie_management:
+                        type: object
+                        properties:
+                          awaf_sid:
+                            type: boolean
+                            description: Handle awaf-sid cookie from initial page load
+                            required: true
+                          session_id:
+                            type: boolean
+                            description: Handle session-id cookie from session start
+                            required: true
+                          lb_sticky:
+                            type: boolean
+                            description: Handle lb-sticky cookie for load balancing
+                            required: true
+                        required: true
+                      rate_limiting:
+                        type: object
+                        properties:
+                          enabled:
+                            type: boolean
+                            description: Enable rate limiting for WOZ API calls
+                            required: true
+                          max_requests_per_minute:
+                            type: number
+                            description: Maximum requests per minute
+                            default: 10
+                          retry_delay:
+                            type: number
+                            description: Delay in seconds between retries
+                            default: 5
+                        required: true
+                    required: true
+                  bag_adres_lookup:
+                    type: boolean
+                    description: Automatische adres- en pandgegevens ophalen via BAG Individuele Bevragingen API bij het aanmaken van een dossier.
+                    required: true
+                required: true
+
+# Response templates
+response_templates:
+  success: |
+    Task completed successfully:
+    {{result}}
+    
+    Next steps:
+    {{next_steps}}
+
+  error: |
+    Task failed:
+    {{error_message}}
+    
+    Suggested actions:
+    {{suggested_actions}}
+
+  feature_update: |
+    Features updated:
+    {{feature_changes}}
+    
+    Current status:
+    {{feature_status}}
+    
+    Next features to implement:
+    {{next_features}}
+
+  deployment_info: |
+    Deployment Architecture: Helm-only Kubernetes deployment
+    
+    Configuration:
+    - Base values: deployment/pandoorac/values.yaml
+    - Environment config: config.yaml
+    - Generated values: deployment/pandoorac/values-{environment}.yaml
+    
+    Deployment Commands:
+    - Interactive: ./deploy.sh
+    - Direct: ./deploy.sh {environment} {action}
+    
+    Available Actions:
+    - deploy: Full deployment with image build
+    - deploy-no-build: Deploy without building image
+    - check: Check deployment status
+    - cleanup: Remove deployment
+    - debug: Show detailed logs

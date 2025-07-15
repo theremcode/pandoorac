@@ -1,0 +1,948 @@
+{% extends "base.html" %}
+
+{% block title %}{{ dossier.naam }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4" data-woonfunctie="{% if dossier.gebruiksdoel and 'woonfunctie' in dossier.gebruiksdoel.lower() %}true{% else %}false{% endif %}">
+    <div>
+        <h1>{{ dossier.naam }}</h1>
+        <p class="text-muted">
+            <i class="bi bi-geo-alt"></i> {{ dossier.adres }}<br>
+            {{ dossier.postcode }} {{ dossier.plaats }}
+        </p>
+        <div class="mb-3">
+            <strong>Bouwjaar:</strong> {{ dossier.bouwjaar or '-' }}<br>
+            <strong>Oppervlakte (m²):</strong> {{ dossier.oppervlakte or '-' }}<br>
+            <strong>Inhoud (m³):</strong> {{ dossier.inhoud or '-' }}<br>
+            <strong>Hoogte (m):</strong> {{ dossier.hoogte or '-' }}<br>
+            <strong>Aantal bouwlagen:</strong> {{ dossier.aantal_bouwlagen or '-' }}<br>
+            <strong>Gebruiksdoel:</strong> {% if dossier.gebruiksdoel %}{% set doelen = dossier.gebruiksdoel.split(',') %}{% for doel in doelen %}<span class="badge bg-info text-dark me-1">{{ doel.strip() }}</span>{% endfor %}{% else %}-{% endif %}
+        </div>
+    </div>
+    <div class="btn-group">
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#nieuweTaxatieModal">
+            <i class="bi bi-plus-circle"></i> Nieuwe Taxatie
+        </button>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadDocumentModal">
+            <i class="bi bi-upload"></i> Document Uploaden
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Taxaties -->
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Taxaties</h5>
+            </div>
+            <div class="card-body">
+                {% if dossier.taxaties %}
+                <div class="list-group">
+                    {% for taxatie in dossier.taxaties|sort(attribute='datum', reverse=true) %}
+                    <div class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-1">{{ taxatie.datum.strftime('%d-%m-%Y') }}</h6>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge {% if taxatie.status == 'definitief' %}bg-success{% elif taxatie.status == 'concept' %}bg-warning{% else %}bg-secondary{% endif %} me-2">
+                                            {{ taxatie.status|title }}
+                                        </span>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{{ url_for('bewerk_taxatie', dossier_id=dossier.id, taxatie_id=taxatie.id) }}" 
+                                               class="btn btn-outline-primary btn-sm">
+                                                <i class="bi bi-pencil"></i> Bewerken
+                                            </a>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm" 
+                                                    data-bs-toggle="modal" data-bs-target="#statusModal{{ taxatie.id }}">
+                                                <i class="bi bi-gear"></i> Status
+                                            </button>
+                                            <button type="button" class="btn btn-outline-info btn-sm" 
+                                                    data-bs-toggle="modal" data-bs-target="#historyModal{{ taxatie.id }}">
+                                                <i class="bi bi-clock-history"></i> Geschiedenis
+                                            </button>
+                                            {% if taxatie.status != 'definitief' %}
+                                            <button type="button" class="btn btn-outline-danger btn-sm delete-taxatie-btn"
+                                                    data-taxatie-id="{{ taxatie.id }}"
+                                                    data-taxatie-datum="{{ taxatie.datum.strftime('%d-%m-%Y') }}">
+                                                <i class="bi bi-trash"></i> Verwijderen
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                <p class="mb-1">
+                                    <strong>Taxateur:</strong> {{ taxatie.taxateur }}<br>
+                                    <strong>Waarde:</strong> €{{ "%.2f"|format(taxatie.waarde) }}
+                                </p>
+                                {% if taxatie.opmerkingen %}
+                                <p class="mb-1 text-muted">{{ taxatie.opmerkingen }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if taxatie.photos %}
+                        <div class="mt-2">
+                            {% for photo in taxatie.photos %}
+                            <a href="{{ url_for('get_photo', photo_id=photo.id) }}" target="_blank" class="me-2">
+                                <img src="{{ url_for('get_photo', photo_id=photo.id) }}" 
+                                     alt="Foto" class="img-thumbnail" style="max-height: 50px;">
+                            </a>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Status Change Modal for this taxatie -->
+                    <div class="modal fade" id="statusModal{{ taxatie.id }}" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Status Wijzigen - {{ taxatie.datum.strftime('%d-%m-%Y') }}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <p>Huidige status: <strong>{{ taxatie.status|title }}</strong></p>
+                                    <form method="POST" action="{{ url_for('wijzig_taxatie_status', dossier_id=dossier.id, taxatie_id=taxatie.id) }}">
+                                        <div class="mb-3">
+                                            <label for="status{{ taxatie.id }}" class="form-label">Nieuwe Status</label>
+                                            <select class="form-select" id="status{{ taxatie.id }}" name="status" required>
+                                                <option value="">Selecteer status...</option>
+                                                <option value="concept" {% if taxatie.status == 'concept' %}selected{% endif %}>Concept</option>
+                                                <option value="definitief" {% if taxatie.status == 'definitief' %}selected{% endif %}>Definitief</option>
+                                                <option value="gearchiveerd" {% if taxatie.status == 'gearchiveerd' %}selected{% endif %}>Gearchiveerd</option>
+                                            </select>
+                                        </div>
+                                        <div class="d-flex justify-content-end">
+                                            <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Annuleren</button>
+                                            <button type="submit" class="btn btn-primary">Status Wijzigen</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Status History Modal for this taxatie -->
+                    <div class="modal fade" id="historyModal{{ taxatie.id }}" tabindex="-1">
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Status Geschiedenis - {{ taxatie.datum.strftime('%d-%m-%Y') }}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <div class="modal-body">
+                                    {% if taxatie.status_history %}
+                                    <div class="table-responsive">
+                                        <table class="table table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Datum</th>
+                                                    <th>Van</th>
+                                                    <th>Naar</th>
+                                                    <th>Gebruiker</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for history in taxatie.status_history %}
+                                                <tr>
+                                                    <td>{{ history.timestamp.strftime('%d-%m-%Y %H:%M') }}</td>
+                                                    <td><span class="badge bg-secondary">{{ history.old_status|title }}</span></td>
+                                                    <td><span class="badge bg-primary">{{ history.new_status|title }}</span></td>
+                                                    <td>{{ history.user.username }}</td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {% else %}
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> Geen status geschiedenis beschikbaar.
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Geen taxaties beschikbaar.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Documents -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Documenten</h5>
+            </div>
+            <div class="card-body">
+                {% if dossier.documents %}
+                <div class="list-group">
+                    {% for document in dossier.documents|sort(attribute='uploaded_at', reverse=true) %}
+                    <a href="{{ url_for('get_document', document_id=document.id) }}" class="list-group-item list-group-item-action">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-file-earmark-text"></i>
+                                {{ document.original_filename }}
+                            </div>
+                            <small class="text-muted">
+                                {{ document.uploaded_at.strftime('%d-%m-%Y') }}
+                            </small>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Geen documenten beschikbaar.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- WOZ Data Card -->
+{% set woz = dossier.woz_data[0] if dossier.woz_data else None %}
+<div class="card mb-3" id="woz-card" style="{% if not dossier.gebruiksdoel or 'woonfunctie' not in dossier.gebruiksdoel.lower() %}display:none;{% endif %}" 
+     data-adres="{{ dossier.adres }}" 
+     data-postcode="{{ dossier.postcode }}" 
+     data-plaats="{{ dossier.plaats }}" 
+     data-gebruiksdoel="{{ dossier.gebruiksdoel }}">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-building"></i> WOZ Data
+        </h5>
+        <button id="woz-refresh-btn" class="btn btn-outline-primary btn-sm" type="button">
+            <i class="bi bi-arrow-clockwise"></i> Verversen
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="woz-loading" style="display: none;">
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">WOZ data wordt opgehaald...</p>
+            </div>
+        </div>
+        <div id="woz-content">
+            {% if woz %}
+                <table class="table table-sm">
+                    <tbody>
+                        <tr><th>WOZ-objectnummer</th><td>{{ woz.wozobjectnummer }}</td></tr>
+                        <tr><th>Adres</th><td>{{ woz.straatnaam }} {{ woz.huisnummer }}{{ woz.huisletter }}{{ woz.huisnummertoevoeging }}, {{ woz.postcode }} {{ woz.woonplaatsnaam }}</td></tr>
+                        <tr><th>Openbare ruimte type</th><td>{{ woz.openbareruimtetype or '-' }}</td></tr>
+                        <tr><th>Gemeentecode</th><td>{{ woz.gemeentecode }}</td></tr>
+                        <tr><th>Grondoppervlakte</th><td>{{ woz.grondoppervlakte }} m²</td></tr>
+                        <tr><th>Kadastraal</th><td>{{ woz.kadastrale_gemeente_code }} {{ woz.kadastrale_sectie }} {{ woz.kadastraal_perceel_nummer }}</td></tr>
+                        <tr><th>Buurtnaam</th><td>{{ (woz.api_response_data | fromjson).get('buurtnaam', '-') }}</td></tr>
+                        <tr><th>Wijknaam</th><td>{{ (woz.api_response_data | fromjson).get('wijknaam', '-') }}</td></tr>
+                        <tr><th>Waterschapsnaam</th><td>{{ (woz.api_response_data | fromjson).get('waterschapsnaam', '-') }}</td></tr>
+                        <tr><th>Gekoppeld perceel</th><td>{{ (woz.api_response_data | fromjson).get('gekoppeld_perceel', '-') }}</td></tr>
+                        <tr><th>Laatst bijgewerkt</th><td>{{ woz.last_updated.strftime('%d-%m-%Y %H:%M') }}</td></tr>
+                    </tbody>
+                </table>
+                <b>WOZ-waarde historie:</b>
+                <ul>
+                {% for value in woz.woz_values %}
+                    <li>{{ value.peildatum.strftime('%Y-%m-%d') }}: € {{ value.vastgestelde_waarde | int | string | replace(',', '.') | int | string | replace('.', ',') }}</li>
+                {% endfor %}
+                </ul>
+                <details class="mt-3">
+                    <summary>Ruwe WOZ API-data (JSON)</summary>
+                    <pre style="max-height:300px;overflow:auto;background:#f8f9fa;border:1px solid #eee;padding:8px;">{{ woz.api_response_data | tojson(indent=2) }}</pre>
+                </details>
+            {% else %}
+                <span class="text-danger">Nog geen WOZ-data opgeslagen voor dit dossier. Klik op verversen.</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- BAG Data Card -->
+{% set bag = dossier.bag_data[0] if dossier.bag_data else None %}
+<div class="card mb-3" id="bag-card" 
+     data-adres="{{ dossier.adres }}" 
+     data-postcode="{{ dossier.postcode }}" 
+     data-plaats="{{ dossier.plaats }}"
+     data-huisnummer="{{ bag.huisnummer if bag and bag.huisnummer else '' }}"
+     data-huisletter="{{ bag.huisletter if bag and bag.huisletter else '' }}">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-house"></i> BAG Data
+        </h5>
+        <button id="bag-refresh-btn" class="btn btn-outline-primary btn-sm" type="button">
+            <i class="bi bi-arrow-clockwise"></i> Verversen
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="bag-loading" style="display: none;">
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">BAG data wordt opgehaald...</p>
+            </div>
+        </div>
+        <div id="bag-content">
+            {% if bag %}
+                <table class="table table-sm">
+                    <tbody>
+                        <tr><th>Adres</th><td>{{ bag.straatnaam }} {{ bag.huisnummer }}{{ bag.huisletter }}, {{ bag.postcode }} {{ bag.woonplaats }}</td></tr>
+                        <tr><th>Bouwjaar</th><td>{{ bag.bouwjaar or '-' }}</td></tr>
+                        <tr><th>Oppervlakte</th><td>{{ bag.oppervlakte or '-' }} m²</td></tr>
+                        <tr><th>Inhoud</th><td>{{ bag.inhoud or '-' }} m³</td></tr>
+                        <tr><th>Hoogte</th><td>{{ bag.hoogte or '-' }} m</td></tr>
+                        <tr><th>Aantal bouwlagen</th><td>{{ bag.aantal_bouwlagen or '-' }}</td></tr>
+                        <tr><th>Gebruiksdoel</th><td>{% if bag.gebruiksdoel %}{% set doelen = bag.gebruiksdoel.split(',') %}{% for doel in doelen %}<span class="badge bg-info text-dark me-1">{{ doel.strip() }}</span>{% endfor %}{% else %}-{% endif %}</td></tr>
+                        <tr><th>Laatst bijgewerkt</th><td>{{ bag.last_updated.strftime('%d-%m-%Y %H:%M') }}</td></tr>
+                    </tbody>
+                </table>
+                <details class="mt-3">
+                    <summary>Ruwe BAG API-data (JSON)</summary>
+                    <pre style="max-height:300px;overflow:auto;background:#f8f9fa;border:1px solid #eee;padding:8px;">{{ bag.api_response_data | tojson(indent=2) }}</pre>
+                </details>
+            {% else %}
+                <table class="table table-sm">
+                    <tbody>
+                        <tr><th>Adres</th><td>{{ dossier.adres }}, {{ dossier.postcode }} {{ dossier.plaats }}</td></tr>
+                        <tr><th>Bouwjaar</th><td>{{ dossier.bouwjaar or '-' }}</td></tr>
+                        <tr><th>Oppervlakte</th><td>{{ dossier.oppervlakte or '-' }} m²</td></tr>
+                        <tr><th>Inhoud</th><td>{{ dossier.inhoud or '-' }} m³</td></tr>
+                        <tr><th>Hoogte</th><td>{{ dossier.hoogte or '-' }} m</td></tr>
+                        <tr><th>Aantal bouwlagen</th><td>{{ dossier.aantal_bouwlagen or '-' }}</td></tr>
+                        <tr><th>Gebruiksdoel</th><td>{% if dossier.gebruiksdoel %}{% set doelen = dossier.gebruiksdoel.split(',') %}{% for doel in doelen %}<span class="badge bg-info text-dark me-1">{{ doel.strip() }}</span>{% endfor %}{% else %}-{% endif %}</td></tr>
+                    </tbody>
+                </table>
+                <details class="mt-3">
+                    <summary>Ruwe BAG API-data (JSON)</summary>
+                    <pre id="bag-json-data" style="max-height:300px;overflow:auto;background:#f8f9fa;border:1px solid #eee;padding:8px;">Geen BAG data beschikbaar</pre>
+                </details>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Map Visualization Card -->
+{% if bag and bag.latitude and bag.longitude %}
+<div class="card mb-3" id="map-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-geo-alt"></i> Locatie op Kaart
+        </h5>
+        <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-secondary" id="map-type-roadmap" data-map-type="roadmap">
+                <i class="bi bi-map"></i> Straat
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="map-type-satellite" data-map-type="satellite">
+                <i class="bi bi-satellite"></i> Satelliet
+            </button>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <div id="property-map" style="height: 400px; width: 100%;"></div>
+        <div class="p-3 border-top">
+            <div class="row">
+                <div class="col-md-6">
+                    <small class="text-muted">
+                        <strong>Coördinaten:</strong><br>
+                        Lat: {{ "%.6f"|format(bag.latitude) }}, Lon: {{ "%.6f"|format(bag.longitude) }}
+                    </small>
+                </div>
+                <div class="col-md-6">
+                    <small class="text-muted">
+                        <strong>BAG ID:</strong><br>
+                        {{ bag.adresseerbaarobjectid or 'Niet beschikbaar' }}
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Nieuwe Taxatie Modal -->
+<div class="modal fade" id="nieuweTaxatieModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-plus-circle"></i> Nieuwe Taxatie - {{ dossier.naam }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Property Details Card -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="card-title mb-0">
+                            <i class="bi bi-house"></i> Pandgegevens
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <strong>Adres:</strong> {{ dossier.adres }}<br>
+                                <strong>Postcode:</strong> {{ dossier.postcode }}<br>
+                                <strong>Plaats:</strong> {{ dossier.plaats }}
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Bouwjaar:</strong> {{ dossier.bouwjaar or '-' }}<br>
+                                <strong>Oppervlakte:</strong> {{ dossier.oppervlakte or '-' }} m²<br>
+                                <strong>Gebruiksdoel:</strong> {% if dossier.gebruiksdoel %}{% set doelen = dossier.gebruiksdoel.split(',') %}{% for doel in doelen %}<span class="badge bg-info text-dark me-1">{{ doel.strip() }}</span>{% endfor %}{% else %}-{% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Taxatie Form -->
+                <form method="POST" action="{{ url_for('nieuwe_taxatie', dossier_id=dossier.id) }}" enctype="multipart/form-data" id="taxatieForm">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="datum" class="form-label">Datum *</label>
+                                <input type="date" class="form-control" id="datum" name="datum" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="taxateur" class="form-label">Taxateur *</label>
+                                <input type="text" class="form-control" id="taxateur" name="taxateur" required>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Calculation Section -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="card-title mb-0">
+                                <i class="bi bi-calculator"></i> Automatische Berekening
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="oppervlakte" class="form-label">Oppervlakte (m²) *</label>
+                                        <input type="number" step="0.01" class="form-control" id="oppervlakte" name="oppervlakte" 
+                                               value="{{ dossier.oppervlakte or '' }}" required>
+                                    </div>
+                                </div>
+                                <div class="col-md-6" id="hoogteField" class="{% if dossier.gebruiksdoel and 'woonfunctie' in dossier.gebruiksdoel.lower() %}d-block{% else %}d-none{% endif %}">
+                                    <div class="mb-3">
+                                        <label for="hoogte_meters" class="form-label">Hoogte (m)</label>
+                                        <input type="number" step="0.1" class="form-control" id="hoogte_meters" name="hoogte_meters" 
+                                               value="2.6" min="0.1">
+                                        <div class="form-text">Standaard 2,6m voor woonfunctie</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6" id="prijsM2Field" class="{% if not dossier.gebruiksdoel or 'woonfunctie' not in dossier.gebruiksdoel.lower() %}d-block{% else %}d-none{% endif %}">
+                                    <div class="mb-3">
+                                        <label for="prijs_per_m2" class="form-label">Prijs per m² (€)</label>
+                                        <input type="number" step="0.01" class="form-control" id="prijs_per_m2" name="prijs_per_m2" min="0">
+                                    </div>
+                                </div>
+                                <div class="col-md-6" id="prijsM3Field" class="{% if dossier.gebruiksdoel and 'woonfunctie' in dossier.gebruiksdoel.lower() %}d-block{% else %}d-none{% endif %}">
+                                    <div class="mb-3">
+                                        <label for="prijs_per_m3" class="form-label">Prijs per m³ (€)</label>
+                                        <input type="number" step="0.01" class="form-control" id="prijs_per_m3" name="prijs_per_m3" min="0">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <button type="button" class="btn btn-primary berekenBtn">
+                                        <i class="bi bi-calculator"></i> Bereken Waarde
+                                    </button>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="alert alert-info d-none" id="berekeningResult">
+                                        <strong>Berekende waarde:</strong> <span id="berekendeWaarde"></span><br>
+                                        <small id="berekeningDetails"></small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="waarde" class="form-label">Waarde (€) *</label>
+                        <input type="number" step="0.01" class="form-control" id="waarde" name="waarde" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="opmerkingen" class="form-label">Opmerkingen</label>
+                        <textarea class="form-control" id="opmerkingen" name="opmerkingen" rows="3"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="photos" class="form-label">Foto's</label>
+                        <input type="file" class="form-control" id="photos" name="photos" multiple accept="image/*">
+                        <div class="form-text">
+                            Selecteer meerdere foto's voor deze taxatie.
+                        </div>
+                    </div>
+
+                    <!-- Hidden fields for calculation method -->
+                    <input type="hidden" id="berekening_methode" name="berekening_methode" value="">
+
+                    <div class="d-flex justify-content-end">
+                        <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Annuleren</button>
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-check-circle"></i> Taxatie Aanmaken
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Document Modal -->
+<div class="modal fade" id="uploadDocumentModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Document Uploaden</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('upload_document', dossier_id=dossier.id) }}" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="document" class="form-label">Selecteer Document</label>
+                        <input type="file" class="form-control" id="document" name="document" required>
+                        <div class="form-text">
+                            Toegestane bestandstypen: PDF, DOC, DOCX, XLS, XLSX, TXT
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Annuleren</button>
+                        <button type="submit" class="btn btn-primary">Uploaden</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Taxatie Modal -->
+<div class="modal fade" id="deleteTaxatieModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Taxatie Verwijderen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Weet u zeker dat u de taxatie van <span id="taxatieDatum"></span> wilt verwijderen?</p>
+                <p class="text-danger"><small>Deze actie kan niet ongedaan worden gemaakt.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuleren</button>
+                <form id="deleteTaxatieForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">Verwijderen</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Bereken taxatie waarde
+    document.body.addEventListener('click', function(e) {
+        if (e.target && e.target.classList.contains('berekenBtn')) {
+            e.preventDefault();
+            const form = e.target.closest('form');
+            const oppervlakte = form.querySelector('#oppervlakte').value;
+            const hoogte = form.querySelector('#hoogte_meters').value || '2.6';
+            const prijsPerM2 = form.querySelector('#prijs_per_m2').value;
+            const prijsPerM3 = form.querySelector('#prijs_per_m3').value;
+            const waardeInput = form.querySelector('#waarde');
+            const berekeningResult = form.querySelector('#berekeningResult');
+            const berekendeWaarde = form.querySelector('#berekendeWaarde');
+            const berekeningDetails = form.querySelector('#berekeningDetails');
+            const berekeningMethodeInput = form.querySelector('#berekening_methode');
+            const isWoonfunctie = document.querySelector('[data-woonfunctie]') ? document.querySelector('[data-woonfunctie]').getAttribute('data-woonfunctie') === 'true' : false;
+            if (!oppervlakte) {
+                alert('Vul eerst de oppervlakte in');
+                return;
+            }
+            if (isWoonfunctie) {
+                if (!prijsPerM3) {
+                    alert('Voor woonfunctie is prijs per m³ verplicht');
+                    return;
+                }
+            } else {
+                if (!prijsPerM2) {
+                    alert('Voor niet-woonfunctie is prijs per m² verplicht');
+                    return;
+                }
+            }
+            const formData = new FormData();
+            formData.append('oppervlakte', oppervlakte);
+            formData.append('hoogte', hoogte);
+            formData.append('prijs_per_m2', prijsPerM2);
+            formData.append('prijs_per_m3', prijsPerM3);
+            fetch('{{ url_for("bereken_taxatie", dossier_id=dossier.id) }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert('Fout: ' + data.error);
+                } else {
+                    berekendeWaarde.textContent = data.waarde_formatted;
+                    berekeningDetails.textContent = data.berekening_details;
+                    berekeningResult.classList.remove('d-none');
+                    berekeningResult.classList.add('d-block');
+                    waardeInput.value = data.waarde;
+                    berekeningMethodeInput.value = data.berekening_methode;
+                }
+            })
+            .catch(error => {
+                alert('Er is een fout opgetreden bij de berekening: ' + error.message);
+            });
+        }
+    });
+
+    // Voorkom submit zonder waarde
+    const taxatieForm = document.getElementById('taxatieForm');
+    if (taxatieForm) {
+        taxatieForm.addEventListener('submit', function(e) {
+            const waardeInput = this.querySelector('#waarde');
+            if (!waardeInput.value || waardeInput.value === '0') {
+                e.preventDefault();
+                alert('Vul eerst een waarde in of gebruik de "Bereken Waarde" knop');
+                return false;
+            }
+        });
+    }
+
+    // WOZ Data verversen
+    const wozCard = document.getElementById('woz-card');
+    const wozRefreshBtn = document.getElementById('woz-refresh-btn');
+    const wozLoading = document.getElementById('woz-loading');
+    const wozContent = document.getElementById('woz-content');
+    
+    console.log('WOZ elements check:', {
+        wozRefreshBtn: !!wozRefreshBtn,
+        wozCard: !!wozCard,
+        wozLoading: !!wozLoading,
+        wozContent: !!wozContent,
+        wozCardDisplay: wozCard ? wozCard.style.display : 'N/A'
+    });
+    
+    if (wozRefreshBtn && wozCard && wozLoading && wozContent) {
+        wozRefreshBtn.addEventListener('click', function() {
+            console.log('WOZ refresh button clicked');
+            wozLoading.style.display = 'block';
+            wozContent.style.display = 'none';
+            const adres = wozCard.getAttribute('data-adres');
+            const dossierId = {{ dossier.id }};
+            
+            console.log('WOZ request data:', { address: adres, dossier_id: dossierId });
+            
+            fetch('/api/woz_lookup_and_save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ address: adres, dossier_id: dossierId })
+            })
+            .then(resp => {
+                console.log('WOZ response status:', resp.status);
+                return resp.json();
+            })
+            .then(data => {
+                console.log('WOZ response data:', data);
+                wozLoading.style.display = 'none';
+                wozContent.style.display = 'block';
+                if (data.success) {
+                    location.reload();
+                } else {
+                    wozContent.innerHTML = '<span class="text-danger">' + (data.error || 'Fout bij ophalen WOZ-data') + '</span>';
+                }
+            })
+            .catch(err => {
+                console.error('WOZ error:', err);
+                wozLoading.style.display = 'none';
+                wozContent.style.display = 'block';
+                wozContent.innerHTML = '<span class="text-danger">Fout bij ophalen WOZ-data: ' + err.message + '</span>';
+            });
+        });
+    } else {
+        console.log('WOZ elements not found:', {
+            wozRefreshBtn: !!wozRefreshBtn,
+            wozCard: !!wozCard,
+            wozLoading: !!wozLoading,
+            wozContent: !!wozContent
+        });
+    }
+
+    // BAG Data verversen
+    const bagCard = document.getElementById('bag-card');
+    const bagRefreshBtn = document.getElementById('bag-refresh-btn');
+    const bagLoading = document.getElementById('bag-loading');
+    const bagContent = document.getElementById('bag-content');
+    const bagJsonData = document.getElementById('bag-json-data');
+    
+    if (bagRefreshBtn && bagCard && bagLoading && bagContent) {
+        bagRefreshBtn.addEventListener('click', function() {
+            console.log('BAG refresh button clicked');
+            bagLoading.style.display = 'block';
+            bagContent.style.display = 'none';
+            
+            // Get postcode and house number from data attributes
+            const postcode = bagCard.getAttribute('data-postcode');
+            let huisnummer = bagCard.getAttribute('data-huisnummer');
+            const huisletter = bagCard.getAttribute('data-huisletter') || '';
+            
+            // If no huisnummer from BAG data, try to extract from address
+            if (!huisnummer) {
+                const adres = bagCard.getAttribute('data-adres');
+                if (adres) {
+                    // Extract house number from address (e.g., "Pippelingstraat 31" -> "31")
+                    const adresParts = adres.split(',')[0].split(' ');
+                    for (let part of adresParts) {
+                        // Remove common suffixes and check if it's a number
+                        const cleanPart = part.replace(/[-ABab]/g, '');
+                        if (cleanPart && !isNaN(cleanPart)) {
+                            huisnummer = cleanPart;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Debug logging
+            console.log('DEBUG BAG JS: bagCard data attributes:', {
+                postcode: bagCard.getAttribute('data-postcode'),
+                huisnummer: huisnummer,
+                huisletter: huisletter,
+                adres: bagCard.getAttribute('data-adres'),
+                plaats: bagCard.getAttribute('data-plaats')
+            });
+            
+            if (!huisnummer) {
+                bagLoading.style.display = 'none';
+                bagContent.style.display = 'block';
+                bagContent.innerHTML = '<span class="text-danger">Kon huisnummer niet bepalen uit adres</span>';
+                return;
+            }
+            
+            const dossierId = {{ dossier.id }};
+            
+            const requestData = { 
+                postcode: postcode, 
+                huisnummer: huisnummer, 
+                huisletter: huisletter, 
+                dossier_id: dossierId 
+            };
+            
+            console.log('DEBUG BAG JS: Sending request data:', requestData);
+            
+            fetch('/api/bag_lookup_and_save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData)
+            })
+            .then(resp => {
+                console.log('BAG response status:', resp.status);
+                return resp.json();
+            })
+            .then(data => {
+                console.log('BAG response data:', data);
+                bagLoading.style.display = 'none';
+                bagContent.style.display = 'block';
+                if (data.success) {
+                    // Update JSON data display if element exists
+                    if (bagJsonData) {
+                        bagJsonData.textContent = JSON.stringify(data.data, null, 2);
+                    }
+                    // Reload page to show updated data
+                    location.reload();
+                } else {
+                    bagContent.innerHTML = '<span class="text-danger">' + (data.error || 'Fout bij ophalen BAG-data') + '</span>';
+                }
+            })
+            .catch(err => {
+                console.error('BAG error:', err);
+                bagLoading.style.display = 'none';
+                bagContent.style.display = 'block';
+                bagContent.innerHTML = '<span class="text-danger">Fout bij ophalen BAG-data: ' + err.message + '</span>';
+            });
+        });
+    } else {
+        console.log('BAG elements not found:', {
+            bagRefreshBtn: !!bagRefreshBtn,
+            bagCard: !!bagCard,
+            bagLoading: !!bagLoading,
+            bagContent: !!bagContent
+        });
+    }
+
+    // Taxatie verwijderen
+    document.querySelectorAll('.delete-taxatie-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const taxatieId = this.getAttribute('data-taxatie-id');
+            const taxatieDatum = this.getAttribute('data-taxatie-datum');
+            document.getElementById('taxatieDatum').textContent = taxatieDatum;
+            document.getElementById('deleteTaxatieForm').action = '/dossier/{{ dossier.id }}/taxatie/' + taxatieId + '/verwijderen';
+            const modal = new bootstrap.Modal(document.getElementById('deleteTaxatieModal'));
+            modal.show();
+        });
+    });
+
+    // Map functionality
+    {% if bag and bag.latitude and bag.longitude %}
+    let map = null;
+    let marker = null;
+    let currentMapType = 'roadmap';
+
+    // Initialize map when page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        initializeMap();
+    });
+
+    function initializeMap() {
+        const mapContainer = document.getElementById('property-map');
+        if (!mapContainer) return;
+
+        // Create map using OpenStreetMap
+        map = L.map('property-map').setView([{{ bag.latitude }}, {{ bag.longitude }}], 18);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Add marker for property
+        marker = L.marker([{{ bag.latitude }}, {{ bag.longitude }}]).addTo(map);
+        
+        // Add popup with property info
+        const popupContent = `
+            <div style="min-width: 200px;">
+                <h6><i class="bi bi-house"></i> {{ bag.straatnaam }} {{ bag.huisnummer }}{{ bag.huisletter or '' }}</h6>
+                <p class="mb-1"><strong>Postcode:</strong> {{ bag.postcode }}</p>
+                <p class="mb-1"><strong>Plaats:</strong> {{ bag.woonplaats }}</p>
+                {% if bag.bouwjaar %}
+                <p class="mb-1"><strong>Bouwjaar:</strong> {{ bag.bouwjaar }}</p>
+                {% endif %}
+                {% if bag.oppervlakte %}
+                <p class="mb-1"><strong>Oppervlakte:</strong> {{ bag.oppervlakte }} m²</p>
+                {% endif %}
+                {% if bag.gebruiksdoel %}
+                <p class="mb-0"><strong>Gebruiksdoel:</strong> {{ bag.gebruiksdoel }}</p>
+                {% endif %}
+            </div>
+        `;
+        marker.bindPopup(popupContent);
+
+        // Add building outline if geometry is available
+        {% if bag.geometrie %}
+        try {
+            const geometry = {{ bag.geometrie | safe }};
+            if (geometry && geometry.geometrie) {
+                const coordinates = geometry.geometrie.coordinates;
+                if (coordinates && coordinates.length > 0) {
+                    // Convert coordinates to Leaflet format (lat, lng)
+                    const latLngs = coordinates[0].map(coord => [coord[1], coord[0]]);
+                    
+                    // Add polygon for building outline
+                    const buildingOutline = L.polygon(latLngs, {
+                        color: '#0066cc',
+                        weight: 2,
+                        opacity: 0.8,
+                        fillColor: '#0066cc',
+                        fillOpacity: 0.2
+                    }).addTo(map);
+                    
+                    // Fit map to show both marker and building outline
+                    const group = L.featureGroup([marker, buildingOutline]);
+                    map.fitBounds(group.getBounds().pad(0.1));
+                }
+            }
+        } catch (e) {
+            console.log('Could not parse building geometry:', e);
+        }
+        {% endif %}
+    }
+
+    // Map type switching
+    document.getElementById('map-type-roadmap').addEventListener('click', function() {
+        switchMapType('roadmap');
+    });
+
+    document.getElementById('map-type-satellite').addEventListener('click', function() {
+        switchMapType('satellite');
+    });
+
+    function switchMapType(mapType) {
+        if (mapType === currentMapType) return;
+
+        // Remove existing tiles
+        map.eachLayer((layer) => {
+            if (layer instanceof L.TileLayer) {
+                map.removeLayer(layer);
+            }
+        });
+
+        // Add new tiles based on map type
+        if (mapType === 'satellite') {
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri',
+                maxZoom: 19
+            }).addTo(map);
+        } else {
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+        }
+
+        // Update button states
+        document.querySelectorAll('[data-map-type]').forEach(btn => {
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-outline-secondary');
+        });
+        document.querySelector(`[data-map-type="${mapType}"]`).classList.remove('btn-outline-secondary');
+        document.querySelector(`[data-map-type="${mapType}"]`).classList.add('btn-primary');
+
+        currentMapType = mapType;
+    }
+
+    // Initialize button states
+    document.getElementById('map-type-roadmap').classList.add('btn-primary');
+    document.getElementById('map-type-roadmap').classList.remove('btn-outline-secondary');
+    {% endif %}
+
+    // Find the WOZ card and check if any gebruiksdoel is 'woonfunctie'
+    if (wozCard) {
+        const gebruiksdoelRaw = wozCard.getAttribute('data-gebruiksdoel') || '';
+        const functies = gebruiksdoelRaw.split(',').map(f => f.trim().toLowerCase());
+        if (functies.includes('woonfunctie')) {
+            wozCard.style.display = '';
+        } else {
+            wozCard.style.display = 'none';
+        }
+    }
+});
+</script>
+{% endblock %} 

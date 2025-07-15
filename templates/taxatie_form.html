@@ -1,0 +1,134 @@
+{% macro render_taxatie_form(taxatie=None, dossier=None, action_url='', is_edit=False, disabled=False) %}
+<!-- Pandgegevens kaart bovenaan -->
+<div class="card mb-3">
+    <div class="card-header bg-light">
+        <h6 class="card-title mb-0">
+            <i class="bi bi-house"></i> Pandgegevens
+        </h6>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <strong>Adres:</strong> {{ dossier.adres }}<br>
+                <strong>Postcode:</strong> {{ dossier.postcode }}<br>
+                <strong>Plaats:</strong> {{ dossier.plaats }}
+            </div>
+            <div class="col-md-6">
+                <strong>Bouwjaar:</strong> {{ dossier.bouwjaar or '-' }}<br>
+                <strong>Oppervlakte:</strong> {{ dossier.oppervlakte or '-' }} m²<br>
+                <strong>Inhoud:</strong> {{ dossier.inhoud or '-' }} m³<br>
+                <strong>Hoogte:</strong> {{ dossier.hoogte or '-' }} m<br>
+                <strong>Aantal bouwlagen:</strong> {{ dossier.aantal_bouwlagen or '-' }}<br>
+                <strong>Gebruiksdoel:</strong> {{ dossier.gebruiksdoel or '-' }}
+            </div>
+        </div>
+    </div>
+</div>
+<form method="POST" action="{{ action_url }}" enctype="multipart/form-data" id="taxatieForm" data-woonfunctie="{{ 'true' if dossier.gebruiksdoel and 'woonfunctie' in dossier.gebruiksdoel.lower() else 'false' }}">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="datum" class="form-label">Datum *</label>
+                <input type="date" class="form-control" id="datum" name="datum" required
+                    value="{{ taxatie.datum.strftime('%Y-%m-%d') if taxatie and taxatie.datum else '' }}"
+                    {% if disabled %}disabled{% endif %}>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="taxateur" class="form-label">Taxateur *</label>
+                <input type="text" class="form-control" id="taxateur" name="taxateur" required
+                    value="{{ taxatie.taxateur if taxatie else '' }}"
+                    {% if disabled %}disabled{% endif %}>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="oppervlakte" class="form-label">Oppervlakte (m²) *</label>
+                <input type="number" step="0.01" class="form-control" id="oppervlakte" name="oppervlakte"
+                    value="{{ taxatie.oppervlakte if taxatie and taxatie.oppervlakte else dossier.oppervlakte if dossier else '' }}"
+                    {% if disabled %}disabled{% endif %}>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="hoogte_meters" class="form-label">Hoogte (m)</label>
+                <input type="number" step="0.01" class="form-control" id="hoogte_meters" name="hoogte_meters"
+                    value="{{ taxatie.hoogte_meters if taxatie and taxatie.hoogte_meters else dossier.hoogte if dossier and dossier.hoogte else '2.6' }}"
+                    {% if disabled %}disabled{% endif %}>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="prijs_per_m2" class="form-label">Prijs per m² (€)</label>
+                <input type="number" step="0.01" class="form-control" id="prijs_per_m2" name="prijs_per_m2"
+                    value="{{ taxatie.prijs_per_m2 if taxatie and taxatie.prijs_per_m2 else '' }}"
+                    {% if disabled %}disabled{% endif %}>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="mb-3">
+                <label for="prijs_per_m3" class="form-label">Prijs per m³ (€)</label>
+                <input type="number" step="0.01" class="form-control" id="prijs_per_m3" name="prijs_per_m3"
+                    value="{{ taxatie.prijs_per_m3 if taxatie and taxatie.prijs_per_m3 else '' }}"
+                    {% if disabled %}disabled{% endif %}>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="col-md-6">
+            <button type="button" class="btn btn-primary berekenBtn" {% if disabled %}disabled{% endif %}>
+                <i class="bi bi-calculator"></i> Bereken Waarde
+            </button>
+        </div>
+        <div class="col-md-6">
+            <div class="alert alert-info d-none" id="berekeningResult">
+                <strong>Berekende waarde:</strong> <span id="berekendeWaarde"></span><br>
+                <small id="berekeningDetails"></small>
+            </div>
+        </div>
+    </div>
+    <div class="mb-3">
+        <label for="waarde" class="form-label">Waarde (€) *</label>
+        <input type="number" step="0.01" class="form-control" id="waarde" name="waarde" required
+            value="{{ taxatie.waarde if taxatie else '' }}"
+            {% if disabled %}disabled{% endif %}>
+    </div>
+    <div class="mb-3">
+        <label for="opmerkingen" class="form-label">Opmerkingen</label>
+        <textarea class="form-control" id="opmerkingen" name="opmerkingen" rows="3" {% if disabled %}disabled{% endif %}>{{ taxatie.opmerkingen if taxatie else '' }}</textarea>
+    </div>
+    <div class="mb-3">
+        <label for="photos" class="form-label">Foto's</label>
+        <input type="file" class="form-control" id="photos" name="photos" multiple accept="image/*" {% if disabled %}disabled{% endif %}>
+        <div class="form-text">
+            Selecteer meerdere foto's voor deze taxatie.
+        </div>
+    </div>
+    {% if is_edit and taxatie and taxatie.photos %}
+    <div class="mb-3">
+        <label class="form-label">Bestaande Foto's</label>
+        <div class="row">
+            {% for photo in taxatie.photos %}
+            <div class="col-md-3 mb-2">
+                <img src="{{ url_for('get_photo', photo_id=photo.id) }}" alt="Foto" class="img-thumbnail" style="max-height: 100px;">
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    <input type="hidden" id="berekening_methode" name="berekening_methode" value="{{ taxatie.berekening_methode if taxatie else '' }}">
+    <div class="d-flex justify-content-end">
+        <a href="{{ url_for('dossier_detail', dossier_id=dossier.id) }}" class="btn btn-secondary me-2">Annuleren</a>
+        {% if not disabled %}
+            <button type="submit" class="btn btn-success">
+                <i class="bi bi-check-circle"></i> {{ 'Opslaan' if is_edit else 'Taxatie Aanmaken' }}
+            </button>
+        {% endif %}
+    </div>
+</form>
+{% endmacro %} 
