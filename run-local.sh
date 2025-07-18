@@ -2,8 +2,12 @@
 
 set -e
 
-# Start docker-compose services
-echo "[INFO] Starting local services with docker-compose..."
+# Build and start docker-compose services
+echo "[INFO] Stopping existing containers..."
+docker-compose down
+
+echo "[INFO] Building and starting local services with docker-compose..."
+docker-compose build app
 docker-compose up -d
 
 echo "[INFO] Waiting for services to be ready..."

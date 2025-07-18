@@ -21,14 +21,16 @@ class WalkScoreService:
         self.api_url = api_url
         self.api_key = api_key
     
-    def lookup_walkscore(self, postcode: str, huisnummer: str, huisletter: str = None, lat: float = None, lon: float = None) -> Tuple[Dict, int]:
+    def lookup_walkscore(self, straat: str = None, huisnummer: str = None, huisletter: str = None, postcode: str = None, woonplaats: str = None, lat: float = None, lon: float = None) -> Tuple[Dict, int]:
         """
         Lookup WalkScore for an address
         
         Args:
-            postcode: Postal code
+            straat: Street name
             huisnummer: House number
             huisletter: House letter (optional)
+            postcode: Postal code
+            woonplaats: City name
             lat: Latitude (required for WalkScore API)
             lon: Longitude (required for WalkScore API)
             
@@ -41,12 +43,6 @@ class WalkScoreService:
                 'success': False
             }, 400
         
-        if not postcode or not huisnummer:
-            return {
-                'error': 'Postcode and huisnummer are required',
-                'success': False
-            }, 400
-        
         # Check if coordinates are provided (required by WalkScore API)
         if lat is None or lon is None:
             return {
@@ -54,12 +50,39 @@ class WalkScoreService:
                 'success': False
             }, 400
         
-        # Build address string
-        address_parts = [huisnummer]
-        if huisletter:
-            address_parts.append(huisletter)
-        address_parts.append(postcode)
-        address = " ".join(address_parts)
+        # Build address string in proper format for WalkScore
+        address_parts = []
+        
+        # Add street and house number (preferred format)
+        if straat and huisnummer:
+            house_part = str(huisnummer)
+            if huisletter:
+                house_part += huisletter
+            address_parts.append(f"{straat} {house_part}")
+        elif huisnummer:
+            # Fallback: just house number
+            house_part = str(huisnummer)
+            if huisletter:
+                house_part += huisletter
+            address_parts.append(house_part)
+        
+        # Add postal code and city
+        if postcode:
+            address_parts.append(postcode)
+        if woonplaats:
+            address_parts.append(woonplaats)
+        elif not straat and postcode:
+            # If no city name, add "Netherlands" for better geocoding
+            address_parts.append("Netherlands")
+        
+        # Join address parts
+        if address_parts:
+            address = " ".join(address_parts)
+        else:
+            # Ultimate fallback: use coordinates as address
+            address = f"{lat},{lon}"
+        
+        print(f'DEBUG WalkScore: Using address: {address}', flush=True)
         
         try:
             # Prepare API request parameters

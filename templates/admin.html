@@ -71,7 +71,95 @@
         <div class="tab-pane fade show active" id="users" role="tabpanel" aria-labelledby="users-tab">
             <div class="card mb-4">
                 <div class="card-header">
-                    <h5 class="mb-0">Gebruikersbeheer</h5>
+                    <h5 class="mb-0">Google OAuth Configuratie</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin') }}">
+                        <input type="hidden" name="action" value="update_google_oauth">
+                        <div class="mb-3">
+                            <label for="google_client_id" class="form-label">Google Client ID</label>
+                            <input type="text" class="form-control" id="google_client_id" name="google_client_id" value="{{ google_client_id }}" placeholder="Google OAuth Client ID">
+                        </div>
+                        <div class="mb-3">
+                            <label for="google_client_secret" class="form-label">Google Client Secret</label>
+                            <input type="password" class="form-control" id="google_client_secret" name="google_client_secret" value="{{ google_client_secret }}" placeholder="Google OAuth Client Secret">
+                        </div>
+                        <button type="submit" class="btn btn-primary">Google OAuth configuratie bijwerken</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Gebruikers Whitelist</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin') }}" class="mb-4">
+                        <input type="hidden" name="action" value="add_allowed_user">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <input type="email" class="form-control" name="email" placeholder="Email adres" required>
+                            </div>
+                            <div class="col-md-3">
+                                <input type="text" class="form-control" name="full_name" placeholder="Volledige naam">
+                            </div>
+                            <div class="col-md-3">
+                                <select name="role" class="form-select">
+                                    <option value="user">Gebruiker</option>
+                                    <option value="admin">Administrator</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-success">Toevoegen</button>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Naam</th>
+                                    <th>Rol</th>
+                                    <th>Toegevoegd door</th>
+                                    <th>Status</th>
+                                    <th>Acties</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for allowed_user in allowed_users %}
+                                <tr>
+                                    <td>{{ allowed_user.email }}</td>
+                                    <td>{{ allowed_user.full_name or '-' }}</td>
+                                    <td>{{ allowed_user.role }}</td>
+                                    <td>{{ allowed_user.added_by_user.username }}</td>
+                                    <td>
+                                        {% if allowed_user.is_registered %}
+                                            <span class="badge bg-success">Geregistreerd</span>
+                                            <small class="text-muted">{{ allowed_user.registered_at.strftime('%d-%m-%Y') }}</small>
+                                        {% else %}
+                                            <span class="badge bg-warning">Nog niet geregistreerd</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('admin') }}" class="d-inline">
+                                            <input type="hidden" name="action" value="remove_allowed_user">
+                                            <input type="hidden" name="allowed_user_id" value="{{ allowed_user.id }}">
+                                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Weet je zeker dat je deze gebruiker wilt verwijderen uit de whitelist?')">Verwijderen</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Bestaande Gebruikers</h5>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
@@ -81,6 +169,7 @@
                                     <th>Gebruikersnaam</th>
                                     <th>Email</th>
                                     <th>Rol</th>
+                                    <th>Auth Type</th>
                                     <th>Status</th>
                                     <th>Aangemaakt</th>
                                     <th>Acties</th>
@@ -92,6 +181,13 @@
                                     <td>{{ user.username }}</td>
                                     <td>{{ user.email }}</td>
                                     <td>{{ user.role }}</td>
+                                    <td>
+                                        {% if user.auth_type == 'google' %}
+                                            <span class="badge bg-info">Google</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Local</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <form method="POST" action="{{ url_for('admin') }}" class="d-inline">
                                             <input type="hidden" name="action" value="update_user_status">
@@ -208,7 +304,7 @@
                         </div>
                         <div class="mb-3">
                             <label for="bag_api_key" class="form-label">BAG Individuele Bevraging API Key</label>
-                            <input type="password" class="form-control" id="bag_api_key" name="bag_api_key" value="{{ bag_api_key }}">
+                            <input type="password" class="form-control" id="bag_api_key" name="bag_api_key" value="{{ bag_api_key }}" required>
                         </div>
                         <!-- BAG PDOK API URL field removed: PDOK is open data and the URL is hardcoded in the backend -->
                         <div class="mb-3">
@@ -226,7 +322,7 @@
                         </div>
                         <div class="mb-3">
                             <label for="walkscore_api_key" class="form-label">WalkScore API Key <span class="text-danger">*</span></label>
-                            <input type="password" class="form-control" id="walkscore_api_key" name="walkscore_api_key" value="{{ walkscore_api_key }}" required>
+                            <input type="password" class="form-control" id="walkscore_api_key" name="walkscore_api_key" value="{{ walkscore_api_key }}">
                             <small class="form-text text-muted">Your WalkScore API key is required and will be kept secure.</small>
                             {% if not walkscore_api_key %}
                             <div class="alert alert-warning mt-2" role="alert">
@@ -244,6 +340,110 @@
                 </div>
             </div>
         </div>
+        <!-- Google OAuth & Whitelist -->
+        <div class="tab-pane fade" id="oauth" role="tabpanel" aria-labelledby="oauth-tab">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Google OAuth Configuratie</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin') }}">
+                        <input type="hidden" name="action" value="update_google_oauth">
+                        <div class="mb-3">
+                            <label for="google_client_id" class="form-label">Google Client ID</label>
+                            <input type="text" class="form-control" id="google_client_id" name="google_client_id" value="{{ google_client_id }}" placeholder="Your Google OAuth Client ID">
+                            <small class="form-text text-muted">Te verkrijgen via Google Cloud Console</small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="google_client_secret" class="form-label">Google Client Secret</label>
+                            <input type="password" class="form-control" id="google_client_secret" name="google_client_secret" value="{{ google_client_secret }}" placeholder="Your Google OAuth Client Secret">
+                            <small class="form-text text-muted">Te verkrijgen via Google Cloud Console</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary">Google OAuth configuratie bijwerken</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Gebruiker Whitelist Beheer</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin') }}" class="mb-4">
+                        <input type="hidden" name="action" value="add_allowed_user">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="email" class="form-label">Email Adres</label>
+                                    <input type="email" class="form-control" id="email" name="email" required placeholder="gebruiker@example.com">
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    <label for="full_name" class="form-label">Volledige Naam (optioneel)</label>
+                                    <input type="text" class="form-control" id="full_name" name="full_name" placeholder="Jan Doe">
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="mb-3">
+                                    <label for="role" class="form-label">Rol</label>
+                                    <select class="form-select" id="role" name="role">
+                                        <option value="user">Gebruiker</option>
+                                        <option value="admin">Admin</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="mb-3">
+                                    <label class="form-label">&nbsp;</label>
+                                    <button type="submit" class="btn btn-success d-block">Toevoegen</button>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
+                    
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Naam</th>
+                                    <th>Rol</th>
+                                    <th>Status</th>
+                                    <th>Toegevoegd op</th>
+                                    <th>Acties</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for allowed_user in allowed_users %}
+                                <tr>
+                                    <td>{{ allowed_user.email }}</td>
+                                    <td>{{ allowed_user.full_name or '-' }}</td>
+                                    <td>{{ allowed_user.role }}</td>
+                                    <td>
+                                        {% if allowed_user.is_registered %}
+                                            <span class="badge bg-success">Geregistreerd</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">Nog niet geregistreerd</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ allowed_user.added_at.strftime('%d/%m/%Y') }}</td>
+                                    <td>
+                                        <form method="POST" action="{{ url_for('admin') }}" class="d-inline">
+                                            <input type="hidden" name="action" value="remove_allowed_user">
+                                            <input type="hidden" name="allowed_user_id" value="{{ allowed_user.id }}">
+                                            <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Weet je zeker dat je deze gebruiker wilt verwijderen uit de whitelist?')">Verwijderen</button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
         <!-- Activiteiten Logboek -->
         <div class="tab-pane fade" id="log" role="tabpanel" aria-labelledby="log-tab">
             <div class="card mb-4">
