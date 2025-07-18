@@ -54,6 +54,11 @@ check_prerequisites() {
         exit 1
     fi
     
+    if ! command -v az &> /dev/null; then
+        log_error "Azure CLI is not installed"
+        exit 1
+    fi
+    
     # Check if Docker Buildx is available
     if ! docker buildx version &> /dev/null; then
         log_error "Docker Buildx is not available. Please enable Docker Buildx for multi-architecture builds."
@@ -93,6 +98,14 @@ build_and_push_image() {
         exit 1
     fi
     
+    # Login to Azure Container Registry
+    log_info "Logging into Azure Container Registry..."
+    ACR_NAME=$(echo "$ACR_REGISTRY" | cut -d'.' -f1)
+    if ! az acr login --name "$ACR_NAME"; then
+        log_error "Failed to login to Azure Container Registry: $ACR_NAME"
+        exit 1
+    fi
+    
     # Create and use a new builder instance for multi-platform builds
     log_info "Setting up Docker Buildx for multi-architecture builds..."
     docker buildx create --name pandoorac-builder --use --bootstrap 2>/dev/null || true
@@ -116,9 +129,9 @@ build_and_push_image() {
     
     log_success "Multi-architecture image built and pushed successfully: $FULL_IMAGE_NAME"
     
-    # Update values.yaml with the ACR image
-    log_info "Updating Helm values with ACR image..."
-    sed -i.bak "s|image: .*|image: $FULL_IMAGE_NAME|" "$CHART_PATH/values.yaml"
+    # Update values.yaml with the ACR image for app only
+    log_info "Updating Helm values with ACR image for app..."
+    sed -i.bak "/^app:/,/^[^ ]/ { s|image: .*|image: $FULL_IMAGE_NAME|; }" "$CHART_PATH/values.yaml"
     
     log_success "Helm values updated"
 }

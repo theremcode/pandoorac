@@ -4,8 +4,25 @@ class Config:
     # Common settings
     SECRET_KEY = os.environ.get('SECRET_KEY', 'dev')
     
+    # URL scheme configuration for HTTPS proxy
+    PREFERRED_URL_SCHEME = os.environ.get('PREFERRED_URL_SCHEME', 'http')
+    SERVER_NAME = os.environ.get('SERVER_NAME', None)
+    
     # Database settings - Local SQLite for development
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///pandoorac.db')
+    def get_database_url():
+        # Check if individual PostgreSQL environment variables are set
+        if all(os.environ.get(var) for var in ['POSTGRES_HOST', 'POSTGRES_USER', 'POSTGRES_PASSWORD', 'POSTGRES_DB']):
+            host = os.environ.get('POSTGRES_HOST')
+            port = os.environ.get('POSTGRES_PORT', '5432')
+            user = os.environ.get('POSTGRES_USER')
+            password = os.environ.get('POSTGRES_PASSWORD')
+            database = os.environ.get('POSTGRES_DB')
+            return f'postgresql://{user}:{password}@{host}:{port}/{database}'
+        else:
+            # Fallback to DATABASE_URL or SQLite
+            return os.environ.get('DATABASE_URL', 'sqlite:///pandoorac.db')
+    
+    SQLALCHEMY_DATABASE_URI = get_database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
     # File storage settings - MinIO as default

@@ -755,6 +755,11 @@ def create_app(config_name='development'):
     # Load configuration
     app.config.from_object(config[config_name])
     
+    # Configure for HTTPS proxy if needed
+    if app.config.get('PREFERRED_URL_SCHEME') == 'https':
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1, x_prefix=1)
+    
     # Configure logging to suppress health check requests
     logging.basicConfig(level=logging.INFO)
     werkzeug_logger = logging.getLogger('werkzeug')

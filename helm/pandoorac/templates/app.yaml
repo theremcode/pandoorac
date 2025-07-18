@@ -36,8 +36,14 @@ spec:
         ports:
         - containerPort: {{ .Values.app.port }}
         env:
-        - name: DATABASE_URL
-          value: postgresql://{{ .Values.postgresql.username }}:$(POSTGRES_PASSWORD)@{{ .Release.Name }}-postgresql:5432/{{ .Values.postgresql.database }}
+        - name: POSTGRES_HOST
+          value: {{ .Release.Name }}-postgresql
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_DB
+          value: {{ .Values.postgresql.database }}
+        - name: POSTGRES_USER
+          value: {{ .Values.postgresql.username }}
         - name: POSTGRES_PASSWORD
           valueFrom:
             secretKeyRef:
@@ -59,6 +65,10 @@ spec:
             secretKeyRef:
               name: {{ .Release.Name }}-app
               key: secret-key
+        - name: PREFERRED_URL_SCHEME
+          value: https
+        - name: SERVER_NAME
+          value: {{ .Values.ingress.hostname }}
 ---
 apiVersion: v1
 kind: Service
