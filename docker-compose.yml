@@ -4,7 +4,7 @@ services:
     environment:
       POSTGRES_DB: pandoorac
       POSTGRES_USER: pandoorac
-      POSTGRES_PASSWORD: change-me
+      POSTGRES_PASSWORD: ${RANDOM_DB_PASSWORD:-change-me}
     ports:
       - "5432:5432"
     volumes:
@@ -25,7 +25,7 @@ services:
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: change-me
+      MINIO_ROOT_PASSWORD: ${RANDOM_MINIO_SECRET:-change-me}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -38,13 +38,14 @@ services:
     environment:
       FLASK_APP: app.py
       FLASK_ENV: development
-      DATABASE_URL: postgresql://pandoorac:change-me@postgres:5432/pandoorac
+      STORAGE_TYPE: minio
+      DATABASE_URL: postgresql://pandoorac:${RANDOM_DB_PASSWORD:-change-me}@postgres:5432/pandoorac
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: change-me
+      MINIO_SECRET_KEY: ${RANDOM_MINIO_SECRET:-change-me}
       MINIO_BUCKET: pandoorac-local
-      SECRET_KEY: dev-secret-key
+      SECRET_KEY: ${RANDOM_SECRET_KEY:-dev-secret-key}
     ports:
       - "5001:5001"
     depends_on:

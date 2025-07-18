@@ -8,15 +8,15 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///pandoorac.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # File storage settings - Local file system storage
-    STORAGE_TYPE = os.environ.get('STORAGE_TYPE', 'local')
+    # File storage settings - MinIO as default
+    STORAGE_TYPE = os.environ.get('STORAGE_TYPE', 'minio')
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')
     
-    # External API settings
-    BAG_API_URL = os.environ.get('BAG_API_URL', '')
-    BAG_API_KEY = os.environ.get('BAG_API_KEY', '')
-    WOZ_API_URL = os.environ.get('WOZ_API_URL', '')
-    WOZ_API_KEY = os.environ.get('WOZ_API_KEY', '')
+    # MinIO settings
+    MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT', 'http://localhost:9000')
+    MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY', 'minioadmin')
+    MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', 'minioadmin')
+    MINIO_BUCKET = os.environ.get('MINIO_BUCKET', 'pandoorac-local')
     
     # Application settings
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
@@ -24,6 +24,12 @@ class Config:
         'images': {'png', 'jpg', 'jpeg', 'gif'},
         'documents': {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt'}
     }
+    
+    def __init__(self):
+        # Debug: print storage type to verify it's being set correctly
+        print(f"Config STORAGE_TYPE: {self.STORAGE_TYPE}")
+        print(f"Config MINIO_ENDPOINT: {self.MINIO_ENDPOINT}")
+        print(f"Config MINIO_SECRET_KEY: {self.MINIO_SECRET_KEY[:5]}...")
 
 class DevelopmentConfig(Config):
     DEBUG = True

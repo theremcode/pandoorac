@@ -127,11 +127,57 @@ build_and_push_image() {
 deploy() {
     log_info "Deploying Pandoorac to Azure AKS..."
     
+    # Check if namespace exists and has existing secrets
+    if kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+        log_info "Namespace $NAMESPACE exists, checking for existing secrets..."
+        
+        # Try to get existing secrets from the Kubernetes cluster
+        if kubectl get secret "$RELEASE_NAME-postgresql-secret" -n "$NAMESPACE" >/dev/null 2>&1; then
+            log_info "Found existing PostgreSQL secret, extracting password..."
+            RANDOM_DB_PASSWORD=$(kubectl get secret "$RELEASE_NAME-postgresql-secret" -n "$NAMESPACE" -o jsonpath='{.data.postgres-password}' | base64 -d)
+        else
+            log_info "No existing PostgreSQL secret found, generating new one..."
+            RANDOM_DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+        fi
+        
+        if kubectl get secret "$RELEASE_NAME-minio-secret" -n "$NAMESPACE" >/dev/null 2>&1; then
+            log_info "Found existing MinIO secret, extracting password..."
+            RANDOM_MINIO_SECRET=$(kubectl get secret "$RELEASE_NAME-minio-secret" -n "$NAMESPACE" -o jsonpath='{.data.minio-secret-key}' | base64 -d)
+        else
+            log_info "No existing MinIO secret found, generating new one..."
+            RANDOM_MINIO_SECRET=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+        fi
+        
+        if kubectl get secret "$RELEASE_NAME-app-secret" -n "$NAMESPACE" >/dev/null 2>&1; then
+            log_info "Found existing app secret, extracting secret key..."
+            RANDOM_SECRET_KEY=$(kubectl get secret "$RELEASE_NAME-app-secret" -n "$NAMESPACE" -o jsonpath='{.data.secret-key}' | base64 -d)
+        else
+            log_info "No existing app secret found, generating new one..."
+            RANDOM_SECRET_KEY=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+        fi
+        
+        log_info "Using existing/compatible secrets for deployment"
+    else
+        log_info "Namespace $NAMESPACE does not exist, generating new secrets..."
+        # Generate random secrets for production
+        RANDOM_DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+        RANDOM_MINIO_SECRET=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+        RANDOM_SECRET_KEY=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
+        log_info "Generated new secrets for production deployment"
+    fi
+    
+    log_info "Database password: $RANDOM_DB_PASSWORD"
+    log_info "MinIO secret: $RANDOM_MINIO_SECRET"
+    log_info "Flask secret key: $RANDOM_SECRET_KEY"
+    
     # Check if release exists
     if helm list -n "$NAMESPACE" | grep -q "^$RELEASE_NAME[[:space:]]"; then
         log_info "Release $RELEASE_NAME exists, upgrading..."
         helm upgrade "$RELEASE_NAME" "$CHART_PATH" \
             --namespace "$NAMESPACE" \
+            --set postgresql.password="$RANDOM_DB_PASSWORD" \
+            --set minio.secretKey="$RANDOM_MINIO_SECRET" \
+            --set app.secretKey="$RANDOM_SECRET_KEY" \
             --wait \
             --timeout=10m
     else
@@ -139,6 +185,9 @@ deploy() {
         helm install "$RELEASE_NAME" "$CHART_PATH" \
             --create-namespace \
             --namespace "$NAMESPACE" \
+            --set postgresql.password="$RANDOM_DB_PASSWORD" \
+            --set minio.secretKey="$RANDOM_MINIO_SECRET" \
+            --set app.secretKey="$RANDOM_SECRET_KEY" \
             --wait \
             --timeout=10m
     fi
@@ -179,6 +228,9 @@ check_status() {
 create_backup() {
     log_info "Creating manual PostgreSQL backup..."
     
+    # Get the current database password from the secret
+    DB_PASSWORD=$(kubectl get secret "$RELEASE_NAME-postgresql" -n "$NAMESPACE" -o jsonpath='{.data.postgres-password}' | base64 -d 2>/dev/null || echo "pandoorac123")
+    
     # Create a temporary backup job
     cat <<EOF | kubectl apply -f -
 apiVersion: batch/v1
@@ -195,7 +247,7 @@ spec:
         image: postgres:14
         env:
         - name: PGPASSWORD
-          value: pandoorac123
+          value: "$DB_PASSWORD"
         - name: POSTGRES_USER
           value: pandoorac
         - name: POSTGRES_DB

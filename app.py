@@ -63,6 +63,10 @@ class User(UserMixin, db.Model):
     streetsmart_username = db.Column(db.String(120), nullable=True)
     streetsmart_password_hash = db.Column(db.String(255), nullable=True)
     
+    # First login tracking
+    first_login = db.Column(db.Boolean, nullable=False, default=True)
+    first_login_at = db.Column(db.DateTime, nullable=True)
+    
     dossiers = db.relationship('Dossier', backref='user', lazy=True)
     logs = db.relationship('UserLog', backref='user', lazy=True)
 
@@ -751,11 +755,6 @@ def create_app(config_name='development'):
     # Load configuration
     app.config.from_object(config[config_name])
     
-    # Force local storage for development
-    if config_name == 'development':
-        app.config['STORAGE_TYPE'] = 'local'
-        app.config['UPLOAD_FOLDER'] = 'uploads'
-    
     # Configure logging to suppress health check requests
     logging.basicConfig(level=logging.INFO)
     werkzeug_logger = logging.getLogger('werkzeug')
@@ -766,6 +765,15 @@ def create_app(config_name='development'):
     db.init_app(app)
     login_manager.init_app(app)
     storage.init_app(app)
+    
+    # Update max file size from database setting
+    with app.app_context():
+        try:
+            max_file_size_mb = int(get_setting('MAX_FILE_SIZE', '16'))
+            app.config['MAX_CONTENT_LENGTH'] = max_file_size_mb * 1024 * 1024
+        except:
+            # Fallback to config.py setting if database not available
+            pass
     
     # Set up login manager
     login_manager.login_view = 'login'
@@ -792,6 +800,20 @@ def create_app(config_name='development'):
                 
                 # Initialize storage
                 storage.ensure_container_exists()
+                
+                # Zet default storage instellingen in de database als ze nog niet bestaan
+                if get_setting('STORAGE_TYPE') is None:
+                    set_setting('STORAGE_TYPE', 'minio')
+                if get_setting('MINIO_ENDPOINT') is None:
+                    set_setting('MINIO_ENDPOINT', 'http://minio:9000')
+                if get_setting('MINIO_ACCESS_KEY') is None:
+                    set_setting('MINIO_ACCESS_KEY', 'minioadmin')
+                if get_setting('MINIO_SECRET_KEY') is None:
+                    set_setting('MINIO_SECRET_KEY', 'minioadmin')
+                if get_setting('MINIO_BUCKET') is None:
+                    set_setting('MINIO_BUCKET', 'pandoorac-local')
+                if get_setting('MAX_FILE_SIZE') is None:
+                    set_setting('MAX_FILE_SIZE', '16')
                 
                 # Zet default API urls in de database als ze nog niet bestaan
                 if get_setting('BAG_API_URL') is None:
@@ -938,8 +960,22 @@ def login():
         user = User.query.filter_by(username=username).first()
         
         if user and user.check_password(password):
+            # Check if this is the user's first login
+            is_first_login = user.first_login
+            
+            # Update first login tracking
+            if is_first_login:
+                user.first_login = False
+                user.first_login_at = datetime.utcnow()
+                db.session.commit()
+            
             login_user(user)
-            return redirect(url_for('dossiers'))
+            
+            # Redirect to welcome page for first login, otherwise to dossiers
+            if is_first_login:
+                return redirect(url_for('welcome'))
+            else:
+                return redirect(url_for('dossiers'))
         flash('Ongeldige gebruikersnaam of wachtwoord', 'error')
     
     # Check if Google OAuth is enabled
@@ -974,7 +1010,8 @@ def register():
         
         login_user(user)
         flash('Account succesvol aangemaakt', 'success')
-        return redirect(url_for('dossiers'))
+        # New registered users should see welcome page
+        return redirect(url_for('welcome'))
     
     # Check if Google OAuth is enabled
     google_oauth_enabled = bool(get_setting('GOOGLE_CLIENT_ID'))
@@ -1106,14 +1143,29 @@ def google_callback():
                 allowed_user.registered_at = datetime.utcnow()
                 allowed_user.registered_user_id = user.id
         
+        # Check if existing user or creating new user
+        is_first_login = user is None or user.first_login
+        
         db.session.commit()
+        
+        # Update first login tracking for existing users
+        if not is_first_login and user.first_login:
+            user.first_login = False
+            user.first_login_at = datetime.utcnow()
+            db.session.commit()
+        
         login_user(user)
         
         # Clear state
         session.pop('oauth_state', None)
         
         flash('Successfully logged in with Google', 'success')
-        return redirect(url_for('dossiers'))
+        
+        # Redirect to welcome page for first login, otherwise to dossiers
+        if is_first_login:
+            return redirect(url_for('welcome'))
+        else:
+            return redirect(url_for('dossiers'))
         
     except Exception as e:
         flash(f'Error during Google authentication: {str(e)}', 'error')
@@ -1124,6 +1176,12 @@ def google_callback():
 def dossiers():
     user_dossiers = Dossier.query.filter_by(user_id=current_user.id).all()
     return render_template('dossiers.html', dossiers=user_dossiers)
+
+@app.route('/welcome')
+@login_required
+def welcome():
+    """Welcome page for first-time users"""
+    return render_template('welcome.html')
 
 @app.route('/dossier/nieuw', methods=['GET', 'POST'])
 @login_required
@@ -1628,6 +1686,14 @@ def admin():
             flash('Google OAuth instellingen bijgewerkt', 'success')
         elif action == 'update_storage':
             storage_type = request.form.get('storage_type')
+            max_file_size = request.form.get('max_file_size', '16')
+            
+            # Update max file size setting
+            set_setting('MAX_FILE_SIZE', max_file_size)
+            
+            # Update Flask app config for max file size
+            current_app.config['MAX_CONTENT_LENGTH'] = int(max_file_size) * 1024 * 1024
+            
             if storage_type == 'minio':
                 set_setting('STORAGE_TYPE', 'minio')
                 set_setting('MINIO_ENDPOINT', request.form.get('minio_endpoint'))
@@ -1639,7 +1705,7 @@ def admin():
             log = UserLog(
                 user_id=current_user.id,
                 action='update_storage_settings',
-                details=f'Updated storage settings to {storage_type}'
+                details=f'Updated storage settings to {storage_type}, max file size: {max_file_size}MB'
             )
             db.session.add(log)
             db.session.commit()
@@ -1662,18 +1728,7 @@ def admin():
             db.session.add(log)
             db.session.commit()
             flash('API configuraties bijgewerkt', 'success')
-        elif action == 'update_system_settings':
-            set_setting('ALLOW_REGISTRATION', str(request.form.get('allow_registration') == 'true'))
-            set_setting('REQUIRE_EMAIL_VERIFICATION', str(request.form.get('require_email_verification') == 'true'))
-            set_setting('MAX_FILE_SIZE', str(int(request.form.get('max_file_size', 10)) * 1024 * 1024))
-            log = UserLog(
-                user_id=current_user.id,
-                action='update_system_settings',
-                details='Updated system settings'
-            )
-            db.session.add(log)
-            db.session.commit()
-            flash('Systeeminstellingen bijgewerkt', 'success')
+        
     users = User.query.filter(User.id != current_user.id).all()
     total_users = User.query.count()
     active_users = User.query.filter_by(is_active=True).count()
@@ -1694,12 +1749,8 @@ def admin():
                              'total_dossiers': total_dossiers,
                              'total_taxaties': total_taxaties
                          },
-                         system_settings={
-                             'allow_registration': get_setting('ALLOW_REGISTRATION', 'True') == 'True',
-                             'require_email_verification': get_setting('REQUIRE_EMAIL_VERIFICATION', 'False') == 'True',
-                             'max_file_size': int(get_setting('MAX_FILE_SIZE', str(10 * 1024 * 1024))) // (1024 * 1024)
-                         },
                          storage_type=get_setting('STORAGE_TYPE', 'local'),
+                         max_file_size_mb=int(get_setting('MAX_FILE_SIZE', '16')),
                          minio_endpoint=get_setting('MINIO_ENDPOINT', ''),
                          minio_access_key=get_setting('MINIO_ACCESS_KEY', ''),
                          minio_secret_key=get_setting('MINIO_SECRET_KEY', ''),
