@@ -103,6 +103,27 @@
             <i class="bi bi-geo-alt"></i> {{ dossier.adres }}<br>
             {{ dossier.postcode }} {{ dossier.plaats }}
         </p>
+        
+        <!-- Modification tracking info -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <small class="text-muted">
+                    <i class="bi bi-person-plus"></i> <strong>Aangemaakt door:</strong> {{ dossier.creator.username if dossier.creator else 'Onbekend' }}<br>
+                    <i class="bi bi-calendar-plus"></i> <strong>Aangemaakt:</strong> {{ dossier.created_at.strftime('%d-%m-%Y %H:%M') }}
+                </small>
+            </div>
+            <div class="col-md-6">
+                <small class="text-muted">
+                    {% if dossier.last_editor %}
+                        <i class="bi bi-pencil"></i> <strong>Laatst bewerkt door:</strong> {{ dossier.last_editor.username }}<br>
+                        <i class="bi bi-calendar-event"></i> <strong>Laatst bewerkt:</strong> {{ dossier.modified_at.strftime('%d-%m-%Y %H:%M') if dossier.modified_at else 'Nooit bewerkt' }}
+                    {% else %}
+                        <i class="bi bi-info-circle"></i> <strong>Nog niet bewerkt</strong>
+                    {% endif %}
+                </small>
+            </div>
+        </div>
+        
         <div class="mb-3">
             <strong>Bouwjaar:</strong> {{ dossier.bouwjaar or '-' }}<br>
             <strong>Oppervlakte (m²):</strong> {{ dossier.oppervlakte or '-' }}<br>

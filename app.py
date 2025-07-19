@@ -67,7 +67,8 @@ class User(UserMixin, db.Model):
     first_login = db.Column(db.Boolean, nullable=False, default=True)
     first_login_at = db.Column(db.DateTime, nullable=True)
     
-    dossiers = db.relationship('Dossier', backref='user', lazy=True)
+    # Relationships with explicit foreign keys to avoid ambiguity
+    dossiers = db.relationship('Dossier', foreign_keys='Dossier.user_id', backref='user', lazy=True)
     logs = db.relationship('UserLog', backref='user', lazy=True)
 
     def set_password(self, password):
@@ -118,13 +119,23 @@ class Dossier(db.Model):
     aantal_bouwlagen = db.Column(db.String(10))
     gebruiksdoel = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    modified_at = db.Column(db.DateTime, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    last_editor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     taxaties = db.relationship('Taxatie', backref='dossier', lazy=True)
     documents = db.relationship('Document', backref='dossier', lazy=True)
+    # Creator and last editor relationships with explicit foreign keys
+    creator = db.relationship('User', foreign_keys=[user_id], backref='created_dossiers', post_update=True)
+    last_editor = db.relationship('User', foreign_keys=[last_editor_id], backref='edited_dossiers', post_update=True)
     woz_data = db.relationship('WozData', lazy=True)
     bag_data = db.relationship('BagData', lazy=True)
     walkscore_data = db.relationship('WalkScoreData', lazy=True)
     pdok_data = db.relationship('PDOKData', lazy=True)
+    
+    def update_modification_tracking(self, editor_id):
+        """Update modification tracking when dossier is edited"""
+        self.modified_at = datetime.utcnow()
+        self.last_editor_id = editor_id
 
 class Taxatie(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -182,7 +193,7 @@ class Taxatie(db.Model):
             user_id=user_id
         )
         db.session.add(status_log)
-        db.session.commit()
+        # Note: Don't commit here, let the caller handle the commit
 
 class TaxatieStatusHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1179,8 +1190,8 @@ def google_callback():
 @app.route('/dossiers')
 @login_required
 def dossiers():
-    user_dossiers = Dossier.query.filter_by(user_id=current_user.id).all()
-    return render_template('dossiers.html', dossiers=user_dossiers)
+    all_dossiers = Dossier.query.order_by(Dossier.created_at.desc()).all()
+    return render_template('dossiers.html', dossiers=all_dossiers)
 
 @app.route('/welcome')
 @login_required
@@ -1214,7 +1225,9 @@ def nieuw_dossier():
             hoogte=request.form.get('hoogte'),
             aantal_bouwlagen=request.form.get('aantal_bouwlagen'),
             gebruiksdoel=request.form.get('gebruiksdoel'),
-            user_id=current_user.id
+            user_id=current_user.id,
+            last_editor_id=current_user.id,
+            modified_at=datetime.utcnow()
         )
         db.session.add(dossier)
         db.session.commit()
@@ -1300,8 +1313,6 @@ def nieuw_dossier():
 @login_required
 def dossier_detail(dossier_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     # Haal eerste bag_data record op
     bag = dossier.bag_data[0] if dossier.bag_data else None
     bag_terugmeldingen = []
@@ -1373,8 +1384,6 @@ def dossier_detail(dossier_id):
 @login_required
 def nieuwe_taxatie(dossier_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     if request.method == 'POST':
         # Get calculation fields
@@ -1395,6 +1404,8 @@ def nieuwe_taxatie(dossier_id):
             dossier_id=dossier_id
         )
         db.session.add(taxatie)
+        # Update modification tracking for dossier when taxatie is added
+        dossier.update_modification_tracking(current_user.id)
         db.session.commit()
         
         # Handle photo uploads
@@ -1421,8 +1432,6 @@ def nieuwe_taxatie(dossier_id):
 @login_required
 def bewerk_taxatie(dossier_id, taxatie_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     taxatie = Taxatie.query.get_or_404(taxatie_id)
     if taxatie.dossier_id != dossier_id:
@@ -1464,6 +1473,8 @@ def bewerk_taxatie(dossier_id, taxatie_id):
                     )
                     db.session.add(photo_record)
         
+        # Update modification tracking for dossier when taxatie is modified
+        dossier.update_modification_tracking(current_user.id)
         db.session.commit()
         flash('Taxatie succesvol bijgewerkt', 'success')
         return redirect(url_for('dossier_detail', dossier_id=dossier_id))
@@ -1474,8 +1485,6 @@ def bewerk_taxatie(dossier_id, taxatie_id):
 @login_required
 def wijzig_taxatie_status(dossier_id, taxatie_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     taxatie = Taxatie.query.get_or_404(taxatie_id)
     if taxatie.dossier_id != dossier_id:
@@ -1488,6 +1497,9 @@ def wijzig_taxatie_status(dossier_id, taxatie_id):
     
     try:
         taxatie.change_status(new_status, current_user.id)
+        # Update modification tracking for dossier when taxatie status changes
+        dossier.update_modification_tracking(current_user.id)
+        db.session.commit()
         flash(f'Status van taxatie gewijzigd naar "{new_status}"', 'success')
     except ValueError as e:
         flash(str(e), 'error')
@@ -1498,8 +1510,6 @@ def wijzig_taxatie_status(dossier_id, taxatie_id):
 @login_required
 def upload_document(dossier_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     if 'document' not in request.files:
         flash('No file part')
@@ -1519,6 +1529,8 @@ def upload_document(dossier_id):
             dossier_id=dossier_id
         )
         db.session.add(document)
+        # Update modification tracking
+        dossier.update_modification_tracking(current_user.id)
         db.session.commit()
         flash('Document uploaded successfully')
     else:
@@ -1531,9 +1543,6 @@ def upload_document(dossier_id):
 def get_document(document_id):
     document = Document.query.get_or_404(document_id)
     dossier = Dossier.query.get_or_404(document.dossier_id)
-    
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     try:
         file_data = storage.get_file(document.filename)
@@ -1553,9 +1562,6 @@ def get_photo(photo_id):
     photo = Photo.query.get_or_404(photo_id)
     taxatie = Taxatie.query.get_or_404(photo.taxatie_id)
     dossier = Dossier.query.get_or_404(taxatie.dossier_id)
-    
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     try:
         file_data = storage.get_file(photo.filename)
@@ -1815,8 +1821,6 @@ def bag_lookup_and_save():
     try:
         # Check if dossier exists and user has access
         dossier = Dossier.query.get_or_404(dossier_id)
-        if dossier.user_id != current_user.id:
-            return jsonify({'error': 'Geen toegang tot dit dossier'}), 403
         
         api_url = get_setting('BAG_API_URL')
         api_key = get_setting('BAG_API_KEY')
@@ -1905,6 +1909,9 @@ def bag_lookup_and_save():
                 else:
                     dossier.gebruiksdoel = str(result['gebruiksdoel']) if result['gebruiksdoel'] else None
             
+            # Update modification tracking
+            dossier.update_modification_tracking(current_user.id)
+            
             db.session.commit()
             
             return jsonify({
@@ -1973,8 +1980,6 @@ def woz_lookup_and_save():
     try:
         # Check if dossier exists and user has access
         dossier = Dossier.query.get_or_404(dossier_id)
-        if dossier.user_id != current_user.id:
-            return jsonify({'error': 'Geen toegang tot dit dossier'}), 403
         
         # Check if WOZ data already exists for this dossier
         existing_woz = WozData.query.filter_by(dossier_id=dossier_id).first()
@@ -2028,6 +2033,9 @@ def woz_lookup_and_save():
                     vastgestelde_waarde=value_data['vastgestelde_waarde']
                 )
                 db.session.add(woz_value)
+            
+            # Update modification tracking
+            dossier.update_modification_tracking(current_user.id)
             
             db.session.commit()
             
@@ -2101,8 +2109,6 @@ def walkscore_lookup_and_save():
     try:
         # Check if dossier exists and user has access
         dossier = Dossier.query.get_or_404(dossier_id)
-        if dossier.user_id != current_user.id:
-            return jsonify({'error': 'Geen toegang tot dit dossier'}), 403
         
         api_url = get_setting('WALKSCORE_API_URL')
         api_key = get_setting('WALKSCORE_API_KEY')
@@ -2188,6 +2194,9 @@ def walkscore_lookup_and_save():
             
             if not existing_walkscore:
                 db.session.add(walkscore_data)
+            
+            # Update modification tracking
+            dossier.update_modification_tracking(current_user.id)
             
             db.session.commit()
             
@@ -2430,6 +2439,9 @@ def pdok_lookup_and_save():
             )
             db.session.add(pdok_data)
         
+        # Update modification tracking
+        dossier.update_modification_tracking(current_user.id)
+        
         db.session.commit()
         
         return jsonify({
@@ -2531,8 +2543,8 @@ def search_dossiers():
     filter_type = request.args.get('filter', 'all')
     sort_by = request.args.get('sort', 'created_date_desc')
     
-    # Base query - only user's dossiers
-    dossiers_query = Dossier.query.filter_by(user_id=current_user.id)
+    # Base query - all dossiers
+    dossiers_query = Dossier.query
     
     # Apply search filter
     if query:
@@ -2650,8 +2662,6 @@ def get_dossier_map_data(dossier_id):
     try:
         # Check if dossier exists and user has access
         dossier = Dossier.query.get_or_404(dossier_id)
-        if dossier.user_id != current_user.id:
-            return jsonify({'error': 'Geen toegang tot dit dossier'}), 403
         
         # Get BAG data for this dossier
         bag_data = BagData.query.filter_by(dossier_id=dossier_id).first()
@@ -2722,9 +2732,6 @@ def serve_upload(filename):
 def verwijder_dossier(dossier_id):
     """Delete a dossier if it has no taxaties"""
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        flash('Je hebt geen toegang tot dit dossier', 'error')
-        return redirect(url_for('dossiers'))
     
     # Check if dossier has taxaties
     if dossier.taxaties:
@@ -2760,9 +2767,6 @@ def verwijder_dossier(dossier_id):
 def verwijder_taxatie(dossier_id, taxatie_id):
     """Delete a taxatie"""
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        flash('Je hebt geen toegang tot dit dossier', 'error')
-        return redirect(url_for('dossiers'))
     
     taxatie = Taxatie.query.get_or_404(taxatie_id)
     if taxatie.dossier_id != dossier_id:
@@ -2946,14 +2950,13 @@ def startup_health_check():
 @login_required
 def wijzig_dossier_naam(dossier_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        flash('Geen toegang tot dit dossier', 'danger')
-        return redirect(url_for('dossier_detail', dossier_id=dossier_id))
     nieuwe_naam = request.form.get('nieuwe_naam', '').strip()
     if not nieuwe_naam:
         flash('Naam mag niet leeg zijn', 'danger')
         return redirect(url_for('dossier_detail', dossier_id=dossier_id))
     dossier.naam = nieuwe_naam
+    # Update modification tracking
+    dossier.update_modification_tracking(current_user.id)
     db.session.commit()
     flash('Dossiernaam succesvol gewijzigd', 'success')
     return redirect(url_for('dossier_detail', dossier_id=dossier_id))
