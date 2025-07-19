@@ -3,6 +3,7 @@ app:
   image: acrtheremcode.azurecr.io/pandoorac:latest
   replicaCount: 1
   port: 5001  # Flask app port
+  secretKey: "change-me-random-secret"  # Will be overridden by deploy script
 
 ingress:
   enabled: true

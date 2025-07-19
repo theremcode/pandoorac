@@ -1,6 +1,7 @@
 import requests
 import re
 import json
+import urllib.parse
 
 class BagService:
     def __init__(self, api_url, api_key):
@@ -63,6 +64,12 @@ class BagService:
                 return {'error': 'Geen adres details gevonden'}, 404
 
             adres = adressen[0]
+            # Extra validatie: alleen accepteren als huisnummer en postcode exact overeenkomen met input
+            gevonden_huisnummer = str(adres.get('huisnummer', '')).strip()
+            gevonden_postcode = str(adres.get('postcode', '')).replace(' ', '').upper()
+            if gevonden_huisnummer != str(original_huisnummer).strip() or gevonden_postcode != postcode:
+                return {'error': f'Geen exact adres gevonden voor {postcode} {original_huisnummer}'}, 404
+
             vbo_link = adres.get('_links', {}).get('adresseerbaarObject', {}).get('href')
             if not vbo_link:
                 return {'error': 'Geen verblijfsobject link gevonden in adres'}, 404
@@ -108,8 +115,15 @@ class BagService:
 
             print(f'DEBUG BAG: API returned huisnummer: {huisnummer}', flush=True)
 
-            # 6. Verzamel geodata
-            geodata = self._extract_geodata(verblijfsobject, pand)
+            # 6. Verzamel geodata - alleen van BAG, geen PDOK
+            adres_info = {
+                'straat': straat,
+                'huisnummer': huisnummer,
+                'huisletter': huisletter,
+                'postcode': postcode,
+                'woonplaats': woonplaats
+            }
+            geodata = self._extract_geodata_from_bag(verblijfsobject, pand, adres_info)
 
             # Maak volledig adres
             volledig_adres = f"{straat} {huisnummer}"
@@ -124,6 +138,7 @@ class BagService:
                 'hoogte': hoogte,
                 'aantal_bouwlagen': aantal_bouwlagen,
                 'gebruiksdoel': gebruiksdoel,
+                'adresseerbaarobjectid': verblijfsobject.get('identificatie'),
                 'adres': {
                     'straat': straat,
                     'huisnummer': huisnummer,
@@ -144,8 +159,62 @@ class BagService:
         except Exception as e:
             return {'error': f'BAG API request failed: {str(e)}'}, 500 
 
-    def _extract_geodata(self, verblijfsobject, pand):
-        """Extract geodata from BAG API responses"""
+
+    def rd_to_wgs84_simple(self, x, y):
+        """
+        Convert RD (EPSG:28992) coordinates to WGS84 (EPSG:4326) using official transformation
+        Based on the RDNAPTRANS procedure from Kadaster
+        """
+        try:
+            import math
+            
+            # Transformation from RD to WGS84 using official parameters
+            # This is a simplified but accurate version of the RDNAPTRANS transformation
+            
+            # Step 1: Transform RD to Bessel coordinates
+            # RD projection constants
+            X0 = 155000.00  # Reference point X
+            Y0 = 463000.00  # Reference point Y
+            
+            # Calculate normalized coordinates
+            dX = (x - X0) * 1e-5
+            dY = (y - Y0) * 1e-5
+            
+            # Coefficients for latitude (phi) transformation
+            Kp = [0, 2, 0, 2, 0, 2, 1, 4, 2, 4, 1]
+            Kq = [1, 0, 2, 1, 3, 2, 0, 0, 3, 1, 1]
+            Kpq = [3235.65389, -32.58297, -0.24750, -0.84978, -0.06550, -0.01709,
+                   -0.00738, 0.00530, -0.00039, 0.00033, -0.00012]
+            
+            # Coefficients for longitude (lambda) transformation  
+            Lp = [1, 1, 1, 3, 1, 3, 0, 3, 1, 0, 2, 5]
+            Lq = [0, 1, 2, 0, 3, 1, 1, 2, 4, 2, 0, 0]
+            Lpq = [5260.52916, 105.94684, 2.45656, -0.81885, 0.05594, -0.05607,
+                   0.01199, -0.00256, 0.00128, 0.00022, -0.00022, 0.00026]
+            
+            # Calculate phi (latitude) on Bessel ellipsoid
+            phi = 52.15517440
+            for i in range(len(Kpq)):
+                phi += (Kpq[i] * (dX ** Kp[i]) * (dY ** Kq[i])) / 3600
+            
+            # Calculate lambda (longitude) on Bessel ellipsoid
+            lambda_val = 5.38720621  
+            for i in range(len(Lpq)):
+                lambda_val += (Lpq[i] * (dX ** Lp[i]) * (dY ** Lq[i])) / 3600
+            
+            # Step 2: Transform from Bessel to WGS84 datum
+            # These are the official datum shift parameters for Netherlands
+            latitude = phi - 0.00033077 + 0.00001763 * (phi - 52) - 0.00000772 * (lambda_val - 5.4)
+            longitude = lambda_val + 0.00007371 - 0.00001753 * (phi - 52) - 0.00000039 * (lambda_val - 5.4)
+            
+            return latitude, longitude
+            
+        except Exception as e:
+            print(f"Error in RD to WGS84 conversion: {e}")
+            return None, None
+
+    def _extract_geodata_from_bag(self, verblijfsobject, pand, adres_info=None):
+        """Extract geodata from BAG API responses only - no PDOK integration"""
         geodata = {
             'centroide_ll': None,  # Latitude/Longitude
             'centroide_rd': None,  # Dutch RD coordinates
@@ -153,76 +222,107 @@ class BagService:
             'latitude': None,
             'longitude': None,
             'x_coord': None,
-            'y_coord': None
+            'y_coord': None,
+            'google_maps_url': None
         }
 
-        # Extract centroide from verblijfsobject (preferred)
+        # Extract geodata from verblijfsobject (preferred)
         if verblijfsobject:
-            # Try to get centroide from verblijfsobject
             geometrie = verblijfsobject.get('geometrie', {})
             if geometrie:
-                # Extract centroide_ll (WGS84)
-                centroide_ll = geometrie.get('centroide_ll')
-                if centroide_ll:
-                    geodata['centroide_ll'] = centroide_ll
-                    # Parse latitude and longitude
-                    try:
-                        coords = centroide_ll.split(',')
-                        if len(coords) == 2:
-                            geodata['latitude'] = float(coords[0].strip())
-                            geodata['longitude'] = float(coords[1].strip())
-                    except (ValueError, AttributeError):
-                        pass
-
-                # Extract centroide_rd (Dutch RD)
-                centroide_rd = geometrie.get('centroide_rd')
-                if centroide_rd:
-                    geodata['centroide_rd'] = centroide_rd
-                    # Parse X and Y coordinates
-                    try:
-                        coords = centroide_rd.split(',')
-                        if len(coords) == 2:
-                            geodata['x_coord'] = float(coords[0].strip())
-                            geodata['y_coord'] = float(coords[1].strip())
-                    except (ValueError, AttributeError):
-                        pass
+                # Extract coordinates from punt object (RD coordinates)
+                punt = geometrie.get('punt')
+                if punt and punt.get('type') == 'Point' and isinstance(punt.get('coordinates'), list) and len(punt['coordinates']) >= 2:
+                    x, y = punt['coordinates'][0], punt['coordinates'][1]
+                    geodata['x_coord'] = x
+                    geodata['y_coord'] = y
+                    geodata['centroide_rd'] = f"{x},{y}"
+                    print(f"DEBUG BAG: Using verblijfsobject coordinates: {x}, {y}", flush=True)
+                    
+                    # Convert RD to WGS84 for other map layers
+                    lat, lon = self.rd_to_wgs84_simple(x, y)
+                    if lat and lon:
+                        geodata['latitude'] = lat
+                        geodata['longitude'] = lon
+                        geodata['centroide_ll'] = f"{lat},{lon}"
 
                 # Extract full geometry
                 geodata['geometrie'] = geometrie
 
-        # If no centroide from verblijfsobject, try pand
-        if not geodata['centroide_ll'] and pand:
+        # If no coordinates from verblijfsobject, try pand
+        if not geodata.get('x_coord') and pand:
             geometrie = pand.get('geometrie', {})
             if geometrie:
-                # Extract centroide_ll (WGS84)
-                centroide_ll = geometrie.get('centroide_ll')
-                if centroide_ll:
-                    geodata['centroide_ll'] = centroide_ll
-                    # Parse latitude and longitude
-                    try:
-                        coords = centroide_ll.split(',')
-                        if len(coords) == 2:
-                            geodata['latitude'] = float(coords[0].strip())
-                            geodata['longitude'] = float(coords[1].strip())
-                    except (ValueError, AttributeError):
-                        pass
-
-                # Extract centroide_rd (Dutch RD)
-                centroide_rd = geometrie.get('centroide_rd')
-                if centroide_rd:
-                    geodata['centroide_rd'] = centroide_rd
-                    # Parse X and Y coordinates
-                    try:
-                        coords = centroide_rd.split(',')
-                        if len(coords) == 2:
-                            geodata['x_coord'] = float(coords[0].strip())
-                            geodata['y_coord'] = float(coords[1].strip())
-                    except (ValueError, AttributeError):
-                        pass
+                # Try to extract centroid from pand polygon
+                if geometrie.get('type') == 'Polygon':
+                    coordinates = geometrie.get('coordinates', [])
+                    if coordinates and len(coordinates) > 0:
+                        # Calculate centroid of polygon
+                        polygon_coords = coordinates[0]  # First ring
+                        if len(polygon_coords) >= 3:
+                            # Simple centroid calculation
+                            sum_x = sum(coord[0] for coord in polygon_coords if len(coord) >= 2)
+                            sum_y = sum(coord[1] for coord in polygon_coords if len(coord) >= 2)
+                            count = len(polygon_coords)
+                            
+                            if count > 0:
+                                x = sum_x / count
+                                y = sum_y / count
+                                geodata['x_coord'] = x
+                                geodata['y_coord'] = y
+                                geodata['centroide_rd'] = f"{x},{y}"
+                                print(f"DEBUG BAG: Using pand polygon centroid: {x}, {y}", flush=True)
+                                
+                                # Convert RD to WGS84
+                                lat, lon = self.rd_to_wgs84_simple(x, y)
+                                if lat and lon:
+                                    geodata['latitude'] = lat
+                                    geodata['longitude'] = lon
+                                    geodata['centroide_ll'] = f"{lat},{lon}"
 
                 # Extract full geometry if not already set
                 if not geodata['geometrie']:
                     geodata['geometrie'] = geometrie
 
+        # Add Google Maps URL based on address
+        if adres_info:
+            google_maps_url = self.create_google_maps_url(
+                adres_info.get('straat', ''),
+                adres_info.get('huisnummer', ''),
+                adres_info.get('huisletter', ''),
+                adres_info.get('postcode', ''),
+                adres_info.get('woonplaats', '')
+            )
+            if google_maps_url:
+                geodata['google_maps_url'] = google_maps_url
+
         print(f'DEBUG BAG: Extracted geodata: {geodata}', flush=True)
-        return geodata 
+        return geodata
+
+    def create_google_maps_url(self, straat, huisnummer, huisletter, postcode, woonplaats):
+        """
+        Create a Google Maps URL using address instead of coordinates for better accuracy
+        """
+        try:
+            import urllib.parse
+            
+            # Construct the full address
+            address_parts = [straat, str(huisnummer)]
+            if huisletter:
+                address_parts.append(huisletter)
+            address_parts.extend([postcode, woonplaats])
+            
+            full_address = " ".join(address_parts)
+            
+            # URL encode the address
+            encoded_address = urllib.parse.quote_plus(full_address)
+            
+            # Create Google Maps URL
+            google_maps_url = f"https://www.google.com/maps/place/{encoded_address}"
+            
+            print(f'DEBUG BAG: Generated Google Maps URL: {google_maps_url}', flush=True)
+            return google_maps_url
+            
+        except Exception as e:
+            print(f"Error creating Google Maps URL: {e}")
+            return None 

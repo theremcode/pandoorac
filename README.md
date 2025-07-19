@@ -24,6 +24,23 @@ A modern web application for managing appraisals and dossiers, built with Flask 
 
 ### Local Development
 
+#### Option 1: Docker Compose (Recommended for Development)
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd pandoorac
+
+# Run with Docker Compose
+./run-local.sh
+# OR
+docker-compose up --build
+```
+
+The application will be available at http://localhost:5001
+
+#### Option 2: Kubernetes (minikube/OrbStack)
+
 ```bash
 # Clone the repository
 git clone <repository-url>
@@ -87,6 +104,21 @@ The application will be available via Kubernetes ingress or port-forward.
 
 ### Installation
 
+#### Docker Compose (Recommended)
+
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd pandoorac
+   ```
+2. **Run the application:**
+   ```bash
+   ./run-local.sh
+   ```
+3. **The app is now available at http://localhost:5001**
+
+#### Kubernetes (Alternative)
+
 1. **Start your local Kubernetes cluster:**
    ```bash
    minikube start
@@ -105,6 +137,26 @@ The application will be available via Kubernetes ingress or port-forward.
 4. **The app is now available via Kubernetes ingress or port-forward.**
 
 ### Development Commands
+
+#### Docker Compose Commands
+
+```bash
+# Start all services
+./run-local.sh
+# OR
+docker-compose up --build
+
+# View logs
+docker-compose logs -f app
+
+# Stop all services
+docker-compose down
+
+# Rebuild and restart
+docker-compose up --build --force-recreate
+```
+
+#### Kubernetes Commands
 
 ```bash
 # Deploy to development
@@ -127,7 +179,9 @@ pandoorac/
 ├── app.py              # Main application
 ├── requirements.txt    # Python dependencies
 ├── Dockerfile          # Web container config
-├── deploy.sh           # Deployment script
+├── docker-compose.yml  # Local development services
+├── run-local.sh        # Local development script
+├── deploy.sh           # Kubernetes deployment script
 ├── helm/               # Helm charts for Kubernetes
 ├── config.yaml         # Environment-specific config
 └── templates/          # HTML templates

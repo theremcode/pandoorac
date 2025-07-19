@@ -2,10 +2,103 @@
 
 {% block title %}{{ dossier.naam }}{% endblock %}
 
+{% block extra_css %}
+<style>
+.walkscore-circle {
+    display: inline-block;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto;
+}
+
+.walkscore-number {
+    font-size: 1.5rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.walkscore-label {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 2px;
+}
+
+.text-green-600 { color: #059669 !important; }
+.text-green-500 { color: #10b981 !important; }
+.text-yellow-600 { color: #d97706 !important; }
+.text-orange-500 { color: #f97316 !important; }
+.text-red-500 { color: #ef4444 !important; }
+
+.walkscore-placeholder {
+    padding: 2rem 0;
+}
+
+/* PDOK Card Styles */
+.pdok-placeholder {
+    padding: 2rem 0;
+}
+
+.pdok-relevance-circle {
+    display: inline-block;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 3px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto;
+}
+
+.pdok-relevance-number {
+    font-size: 1.2rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.pdok-relevance-label {
+    font-size: 0.7rem;
+    color: #6c757d;
+    margin-top: 2px;
+}
+
+.pdok-relevance-number.excellent {
+    color: #198754;
+}
+
+.pdok-relevance-number.good {
+    color: #0d6efd;
+}
+
+.pdok-relevance-number.fair {
+    color: #fd7e14;
+}
+
+.pdok-relevance-number.poor {
+    color: #dc3545;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4" data-woonfunctie="{% if dossier.gebruiksdoel and 'woonfunctie' in dossier.gebruiksdoel.lower() %}true{% else %}false{% endif %}">
     <div>
-        <h1>{{ dossier.naam }}</h1>
+        <h1 id="dossier-naam-display" class="d-inline">{{ dossier.naam }}</h1>
+        <button id="edit-dossier-naam-btn" class="btn btn-link p-0 ms-2" type="button" title="Naam wijzigen">
+            <i class="bi bi-pencil"></i>
+        </button>
+        <form id="dossier-naam-form" class="d-none mt-2" method="POST" action="{{ url_for('wijzig_dossier_naam', dossier_id=dossier.id) }}" style="display:inline;">
+            <input type="text" name="nieuwe_naam" id="dossier-naam-input" value="{{ dossier.naam }}" class="form-control d-inline w-auto" style="max-width:300px;display:inline-block;">
+            <button type="submit" class="btn btn-success btn-sm ms-1"><i class="bi bi-check"></i></button>
+            <button type="button" id="annuleer-naam-btn" class="btn btn-secondary btn-sm ms-1"><i class="bi bi-x"></i></button>
+        </form>
         <p class="text-muted">
             <i class="bi bi-geo-alt"></i> {{ dossier.adres }}<br>
             {{ dossier.postcode }} {{ dossier.plaats }}
@@ -208,64 +301,6 @@
     </div>
 </div>
 
-<!-- WOZ Data Card -->
-{% set woz = dossier.woz_data[0] if dossier.woz_data else None %}
-<div class="card mb-3" id="woz-card" style="{% if not dossier.gebruiksdoel or 'woonfunctie' not in dossier.gebruiksdoel.lower() %}display:none;{% endif %}" 
-     data-adres="{{ dossier.adres }}" 
-     data-postcode="{{ dossier.postcode }}" 
-     data-plaats="{{ dossier.plaats }}" 
-     data-gebruiksdoel="{{ dossier.gebruiksdoel }}">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="card-title mb-0">
-            <i class="bi bi-building"></i> WOZ Data
-        </h5>
-        <button id="woz-refresh-btn" class="btn btn-outline-primary btn-sm" type="button">
-            <i class="bi bi-arrow-clockwise"></i> Verversen
-        </button>
-    </div>
-    <div class="card-body">
-        <div id="woz-loading" style="display: none;">
-            <div class="text-center">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <p class="mt-2">WOZ data wordt opgehaald...</p>
-            </div>
-        </div>
-        <div id="woz-content">
-            {% if woz %}
-                <table class="table table-sm">
-                    <tbody>
-                        <tr><th>WOZ-objectnummer</th><td>{{ woz.wozobjectnummer }}</td></tr>
-                        <tr><th>Adres</th><td>{{ woz.straatnaam }} {{ woz.huisnummer }}{{ woz.huisletter }}{{ woz.huisnummertoevoeging }}, {{ woz.postcode }} {{ woz.woonplaatsnaam }}</td></tr>
-                        <tr><th>Openbare ruimte type</th><td>{{ woz.openbareruimtetype or '-' }}</td></tr>
-                        <tr><th>Gemeentecode</th><td>{{ woz.gemeentecode }}</td></tr>
-                        <tr><th>Grondoppervlakte</th><td>{{ woz.grondoppervlakte }} m²</td></tr>
-                        <tr><th>Kadastraal</th><td>{{ woz.kadastrale_gemeente_code }} {{ woz.kadastrale_sectie }} {{ woz.kadastraal_perceel_nummer }}</td></tr>
-                        <tr><th>Buurtnaam</th><td>{{ (woz.api_response_data | fromjson).get('buurtnaam', '-') }}</td></tr>
-                        <tr><th>Wijknaam</th><td>{{ (woz.api_response_data | fromjson).get('wijknaam', '-') }}</td></tr>
-                        <tr><th>Waterschapsnaam</th><td>{{ (woz.api_response_data | fromjson).get('waterschapsnaam', '-') }}</td></tr>
-                        <tr><th>Gekoppeld perceel</th><td>{{ (woz.api_response_data | fromjson).get('gekoppeld_perceel', '-') }}</td></tr>
-                        <tr><th>Laatst bijgewerkt</th><td>{{ woz.last_updated.strftime('%d-%m-%Y %H:%M') }}</td></tr>
-                    </tbody>
-                </table>
-                <b>WOZ-waarde historie:</b>
-                <ul>
-                {% for value in woz.woz_values %}
-                    <li>{{ value.peildatum.strftime('%Y-%m-%d') }}: € {{ value.vastgestelde_waarde | int | string | replace(',', '.') | int | string | replace('.', ',') }}</li>
-                {% endfor %}
-                </ul>
-                <details class="mt-3">
-                    <summary>Ruwe WOZ API-data (JSON)</summary>
-                    <pre style="max-height:300px;overflow:auto;background:#f8f9fa;border:1px solid #eee;padding:8px;">{{ woz.api_response_data | tojson(indent=2) }}</pre>
-                </details>
-            {% else %}
-                <span class="text-danger">Nog geen WOZ-data opgeslagen voor dit dossier. Klik op verversen.</span>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
 <!-- BAG Data Card -->
 {% set bag = dossier.bag_data[0] if dossier.bag_data else None %}
 <div class="card mb-3" id="bag-card" 
@@ -278,7 +313,7 @@
         <h5 class="card-title mb-0">
             <i class="bi bi-house"></i> BAG Data
         </h5>
-        <button id="bag-refresh-btn" class="btn btn-outline-primary btn-sm" type="button">
+        <button id="bag-refresh-btn" class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="tooltip" title="Klik om de laatste gegevens op te halen uit de externe databronnen.">
             <i class="bi bi-arrow-clockwise"></i> Verversen
         </button>
     </div>
@@ -295,13 +330,27 @@
             {% if bag %}
                 <table class="table table-sm">
                     <tbody>
-                        <tr><th>Adres</th><td>{{ bag.straatnaam }} {{ bag.huisnummer }}{{ bag.huisletter }}, {{ bag.postcode }} {{ bag.woonplaats }}</td></tr>
+                        {# <tr><th>Adres</th><td>{{ bag.straatnaam }} {{ bag.huisnummer }}{{ bag.huisletter }}, {{ bag.postcode }} {{ bag.woonplaats }}</td></tr> #}
+                        {% if bag.adresseerbaarobjectid %}
+                        <tr><th>BAG object ID</th><td>{{ bag.adresseerbaarobjectid }}</td></tr>
+                        {% endif %}
+                        <tr><th>Volledig adres</th><td>{{ (bag.api_response_data | fromjson).get('adres', {}).get('volledig', '-') }}</td></tr>
                         <tr><th>Bouwjaar</th><td>{{ bag.bouwjaar or '-' }}</td></tr>
                         <tr><th>Oppervlakte</th><td>{{ bag.oppervlakte or '-' }} m²</td></tr>
                         <tr><th>Inhoud</th><td>{{ bag.inhoud or '-' }} m³</td></tr>
                         <tr><th>Hoogte</th><td>{{ bag.hoogte or '-' }} m</td></tr>
                         <tr><th>Aantal bouwlagen</th><td>{{ bag.aantal_bouwlagen or '-' }}</td></tr>
                         <tr><th>Gebruiksdoel</th><td>{% if bag.gebruiksdoel %}{% set doelen = bag.gebruiksdoel.split(',') %}{% for doel in doelen %}<span class="badge bg-info text-dark me-1">{{ doel.strip() }}</span>{% endfor %}{% else %}-{% endif %}</td></tr>
+                        {% if pdok and pdok.latitude and pdok.longitude %}
+                        <tr><th>Coördinaten (lat, lon)</th><td>{{ pdok.latitude }}, {{ pdok.longitude }}<br><small class="text-muted">PDOK (nauwkeurig)</small></td></tr>
+                        {% elif bag.latitude and bag.longitude %}
+                        <tr><th>Coördinaten (lat, lon)</th><td>{{ bag.latitude }}, {{ bag.longitude }}<br><small class="text-muted">BAG (centroide)</small></td></tr>
+                        {% endif %}
+                        {% if bag.x_coord and bag.y_coord %}
+                        <tr><th>RD-coördinaten</th><td>{{ bag.x_coord }}, {{ bag.y_coord }}<br><small class="text-muted">BAG (centroide)</small></td></tr>
+                        {% endif %}
+
+
                         <tr><th>Laatst bijgewerkt</th><td>{{ bag.last_updated.strftime('%d-%m-%Y %H:%M') }}</td></tr>
                     </tbody>
                 </table>
@@ -330,36 +379,326 @@
     </div>
 </div>
 
-<!-- Map Visualization Card -->
-{% if bag and bag.latitude and bag.longitude %}
-<div class="card mb-3" id="map-card">
+<!-- PDOK Data Card -->
+{% set pdok = dossier.pdok_data[0] if dossier.pdok_data else None %}
+<div class="card mb-3" id="pdok-card" 
+     data-postcode="{{ bag.postcode if bag and bag.postcode else dossier.postcode }}" 
+     data-huisnummer="{{ bag.huisnummer if bag and bag.huisnummer else '' }}"
+     data-huisletter="{{ bag.huisletter if bag and bag.huisletter else '' }}"
+     data-has-pdok-data="{% if pdok %}true{% else %}false{% endif %}">
     <div class="card-header d-flex justify-content-between align-items-center">
         <h5 class="card-title mb-0">
-            <i class="bi bi-geo-alt"></i> Locatie op Kaart
+            <i class="bi bi-database"></i> PDOK Data
         </h5>
-        <div class="btn-group btn-group-sm" role="group">
-            <button type="button" class="btn btn-outline-secondary" id="map-type-roadmap" data-map-type="roadmap">
-                <i class="bi bi-map"></i> Straat
-            </button>
-            <button type="button" class="btn btn-outline-secondary" id="map-type-satellite" data-map-type="satellite">
-                <i class="bi bi-satellite"></i> Satelliet
-            </button>
+        <button id="pdok-refresh-btn" class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="tooltip" title="Klik om de laatste gegevens op te halen uit de externe databronnen.">
+            <i class="bi bi-arrow-clockwise"></i> Verversen
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="pdok-loading" style="display: none;">
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">PDOK data wordt opgehaald...</p>
+            </div>
+        </div>
+        <div id="pdok-content">
+            {% if pdok %}
+                <table class="table table-sm">
+                    <tbody>
+                        {% if pdok.bag_id %}
+                        <tr><th>BAG ID</th><td>{{ pdok.bag_id }}</td></tr>
+                        {% endif %}
+                        {% if pdok.address %}
+                        <tr><th>Adres</th><td>{{ pdok.address }}</td></tr>
+                        {% endif %}
+                        {% if pdok.status %}
+                        <tr><th>Status</th><td><span class="badge bg-success">{{ pdok.status }}</span></td></tr>
+                        {% endif %}
+                        {% if pdok.bouwjaar %}
+                        <tr><th>Bouwjaar</th><td>{{ pdok.bouwjaar }}</td></tr>
+                        {% endif %}
+                        {% if pdok.oppervlakte %}
+                        <tr><th>Oppervlakte</th><td>{{ pdok.oppervlakte }} m²</td></tr>
+                        {% endif %}
+                        {% if pdok.property_type %}
+                        <tr><th>Gebouwtype</th><td>{{ pdok.property_type }}</td></tr>
+                        {% endif %}
+                        {% if pdok.property_type_category %}
+                        <tr><th>Categorie</th><td>{{ pdok.property_type_category | title }}</td></tr>
+                        {% endif %}
+                        
+                        <!-- Coördinaten -->
+                        {% if pdok.latitude and pdok.longitude %}
+                        <tr><th>Coördinaten (WGS84)</th><td>{{ pdok.latitude }}, {{ pdok.longitude }}<br><small class="text-muted">PDOK (nauwkeurig)</small></td></tr>
+                        {% endif %}
+                        {% if pdok.x_coord and pdok.y_coord %}
+                        <tr><th>RD-coördinaten</th><td>{{ pdok.x_coord }}, {{ pdok.y_coord }}<br><small class="text-muted">PDOK</small></td></tr>
+                        {% endif %}
+                        
+                        <!-- 3D Gegevens -->
+                        {% if pdok.gebouwhoogte or pdok.dakhoogte or pdok.grondniveau or pdok.volume or pdok.daktype %}
+                        <tr><th colspan="2" class="table-active"><strong>3D Gegevens</strong></th></tr>
+                        {% if pdok.gebouwhoogte %}
+                        <tr><th>Gebouwhoogte</th><td>{{ pdok.gebouwhoogte }} m</td></tr>
+                        {% endif %}
+                        {% if pdok.dakhoogte %}
+                        <tr><th>Dakhoogte</th><td>{{ pdok.dakhoogte }} m</td></tr>
+                        {% endif %}
+                        {% if pdok.grondniveau %}
+                        <tr><th>Grondniveau</th><td>{{ pdok.grondniveau }} m NAP</td></tr>
+                        {% endif %}
+                        {% if pdok.volume %}
+                        <tr><th>Volume</th><td>{{ pdok.volume }} m³</td></tr>
+                        {% endif %}
+                        {% if pdok.daktype %}
+                        <tr><th>Daktype</th><td>{{ pdok.daktype }}</td></tr>
+                        {% endif %}
+                        {% endif %}
+                        
+                        <!-- Kadastrale Gegevens -->
+                        {% set kadastrale_data = (pdok.api_response_data | fromjson).get('property_data', {}).get('kadastrale_data', {}) if pdok.api_response_data else {} %}
+                        {% if kadastrale_data %}
+                        <tr><th colspan="2" class="table-active"><strong>Kadastrale Gegevens</strong></th></tr>
+                        {% if kadastrale_data.kadastrale_gemeente %}
+                        <tr><th>Kadastrale Gemeente</th><td>{{ kadastrale_data.kadastrale_gemeente }}</td></tr>
+                        {% endif %}
+                        {% if kadastrale_data.sectie %}
+                        <tr><th>Sectie</th><td>{{ kadastrale_data.sectie }}</td></tr>
+                        {% endif %}
+                        {% if kadastrale_data.perceelnummer %}
+                        <tr><th>Perceelnummer</th><td>{{ kadastrale_data.perceelnummer }}</td></tr>
+                        {% endif %}
+                        {% if kadastrale_data.oppervlakte %}
+                        <tr><th>Perceel Oppervlakte</th><td>{{ "{:,.0f}".format(kadastrale_data.oppervlakte) }} m²</td></tr>
+                        {% endif %}
+                        {% endif %}
+                        
+                        <!-- Topografische Context -->
+                        {% if pdok.omliggende_gebouwen or pdok.eigenaar_type %}
+                        <tr><th colspan="2" class="table-active"><strong>Topografische Context</strong></th></tr>
+                        {% if pdok.omliggende_gebouwen %}
+                        <tr><th>Omliggende Gebouwen</th><td>{{ pdok.omliggende_gebouwen }}</td></tr>
+                        {% endif %}
+                        {% if pdok.eigenaar_type %}
+                        <tr><th>Eigenaar Type</th><td>{{ pdok.eigenaar_type }}</td></tr>
+                        {% endif %}
+                        {% endif %}
+                        
+                        <!-- Taxatie Relevantie -->
+                        {% if pdok.taxatie_relevance_score %}
+                        <tr><th>Taxatie Relevantie Score</th><td>
+                            <span class="badge {{ 'bg-success' if pdok.taxatie_relevance_score >= 8 else 'bg-primary' if pdok.taxatie_relevance_score >= 6 else 'bg-warning' if pdok.taxatie_relevance_score >= 4 else 'bg-danger' }}">
+                                {{ pdok.taxatie_relevance_score }}/10
+                            </span>
+                        </td></tr>
+                        {% endif %}
+                        
+                        <!-- BAG Terugmeldingen -->
+                        {% if bag_terugmeldingen and bag_terugmeldingen|length > 0 %}
+                        <tr><th colspan="2" class="table-active"><strong>BAG Terugmeldingen</strong></th></tr>
+                        {% for melding in bag_terugmeldingen %}
+                        <tr><th>Melding {{ loop.index }}</th><td>
+                            <strong>Datum:</strong> {{ melding.datumTijdRegistratie[:10] if melding.datumTijdRegistratie else '-' }}<br>
+                            <strong>Status:</strong> {{ melding.status or '-' }}<br>
+                            <strong>Omschrijving:</strong> {{ melding.omschrijving or '-' }}
+                            {% if melding.melder %}<br><strong>Melder:</strong> {{ melding.melder }}{% endif %}
+                        </td></tr>
+                        {% endfor %}
+                        {% else %}
+                        <tr><th>BAG Terugmeldingen</th><td><span class="text-muted">Geen terugmeldingen bekend voor dit adres</span></td></tr>
+                        {% endif %}
+                        
+                        <!-- Data Kwaliteit Indicatoren -->
+                        <tr><th colspan="2" class="table-active"><strong>Data Kwaliteit Indicatoren</strong></th></tr>
+                        <tr><th>Basis Informatie</th><td>
+                            {% if pdok.has_basic_info %}
+                            <i class="bi bi-check-circle-fill text-success"></i> Beschikbaar
+                            {% else %}
+                            <i class="bi bi-x-circle-fill text-danger"></i> Niet beschikbaar
+                            {% endif %}
+                        </td></tr>
+                        <tr><th>3D Gegevens</th><td>
+                            {% if pdok.has_3d_data %}
+                            <i class="bi bi-check-circle-fill text-success"></i> Beschikbaar
+                            {% else %}
+                            <i class="bi bi-x-circle-fill text-danger"></i> Niet beschikbaar
+                            {% endif %}
+                        </td></tr>
+                        <tr><th>Kadastrale Gegevens</th><td>
+                            {% if pdok.has_kadastrale_data %}
+                            <i class="bi bi-check-circle-fill text-success"></i> Beschikbaar
+                            {% else %}
+                            <i class="bi bi-x-circle-fill text-danger"></i> Niet beschikbaar
+                            {% endif %}
+                        </td></tr>
+                        <tr><th>Topografische Gegevens</th><td>
+                            {% if pdok.has_topographic_data %}
+                            <i class="bi bi-check-circle-fill text-success"></i> Beschikbaar
+                            {% else %}
+                            <i class="bi bi-x-circle-fill text-danger"></i> Niet beschikbaar
+                            {% endif %}
+                        </td></tr>
+                        <tr><th>3D Model</th><td>
+                            {% if pdok.has_3d_model %}
+                            <i class="bi bi-check-circle-fill text-success"></i> Beschikbaar
+                            {% else %}
+                            <i class="bi bi-x-circle-fill text-danger"></i> Niet beschikbaar
+                            {% endif %}
+                        </td></tr>
+                        
+                        <tr><th>Laatst bijgewerkt</th><td>{{ pdok.last_updated.strftime('%d-%m-%Y %H:%M') }}</td></tr>
+                    </tbody>
+                </table>
+                <details class="mt-3">
+                    <summary>Ruwe PDOK API-data (JSON)</summary>
+                    <pre style="max-height:300px;overflow:auto;background:#f8f9fa;border:1px solid #eee;padding:8px;">{{ pdok.api_response_data | tojson(indent=2) }}</pre>
+                </details>
+            {% else %}
+                <div class="text-center">
+                    <div class="pdok-placeholder">
+                        <i class="bi bi-database text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-2">Nog geen PDOK data beschikbaar</p>
+                        <p class="text-muted small">Klik op verversen om PDOK data op te halen</p>
+                    </div>
+                </div>
+            {% endif %}
         </div>
     </div>
-    <div class="card-body p-0">
-        <div id="property-map" style="height: 400px; width: 100%;"></div>
-        <div class="p-3 border-top">
+</div>
+
+<!-- BRK Kadastrale Kaart Data Card -->
+{% set pdok_data = pdok.api_response_data | fromjson if pdok and pdok.api_response_data else {} %}
+{% set kadastrale_data = pdok_data.get('property_data', {}).get('kadastrale_data', {}) if pdok_data else {} %}
+
+
+
+{% if kadastrale_data and kadastrale_data.get('perceel_id') %}
+<div class="card mb-3" id="kadastrale-card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-map"></i> BRK Kadastrale Kaart
+        </h5>
+        <div class="btn-group btn-group-sm">
+            <a href="https://www.kadaster.nl/kadastralekaart" target="_blank" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-box-arrow-up-right"></i> Kadastrale Kaart
+            </a>
+            <a href="https://api.pdok.nl/kadaster/brk-kadastrale-kaart/ogc/v1/" target="_blank" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-database"></i> API Info
+            </a>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-6">
+                <h6 class="text-primary mb-3">Perceelgegevens</h6>
+                {% if kadastrale_data.perceel_id %}
+                <div class="mb-2">
+                    <small class="text-muted">Perceel ID:</small><br>
+                    <strong>{{ kadastrale_data.perceel_id }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.kadastrale_gemeente %}
+                <div class="mb-2">
+                    <small class="text-muted">Kadastrale Gemeente:</small><br>
+                    <strong>{{ kadastrale_data.kadastrale_gemeente }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.sectie %}
+                <div class="mb-2">
+                    <small class="text-muted">Sectie:</small><br>
+                    <strong>{{ kadastrale_data.sectie }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.perceelnummer %}
+                <div class="mb-2">
+                    <small class="text-muted">Perceelnummer:</small><br>
+                    <strong>{{ kadastrale_data.perceelnummer }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.oppervlakte %}
+                <div class="mb-2">
+                    <small class="text-muted">Perceel Oppervlakte:</small><br>
+                    <strong>{{ "{:,.0f}".format(kadastrale_data.oppervlakte) }} m²</strong>
+                    {% if kadastrale_data.oppervlakte_hectare %}
+                    <br><small class="text-muted">({{ "{:.4f}".format(kadastrale_data.oppervlakte_hectare) }} hectare)</small>
+                    {% endif %}
+                </div>
+                {% endif %}
+                {% if kadastrale_data.status %}
+                <div class="mb-2">
+                    <small class="text-muted">Status:</small><br>
+                    <span class="badge {% if kadastrale_data.status == 'Geldig' %}bg-success{% else %}bg-warning{% endif %}">
+                        {{ kadastrale_data.status }}
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+            <div class="col-md-6">
+                <h6 class="text-primary mb-3">Registratie & Details</h6>
+                {% if kadastrale_data.soort_grootte %}
+                <div class="mb-2">
+                    <small class="text-muted">Soort Grootte:</small><br>
+                    <strong>{{ kadastrale_data.soort_grootte }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.begin_geldigheid %}
+                <div class="mb-2">
+                    <small class="text-muted">Begin Geldigheid:</small><br>
+                    <strong>{{ kadastrale_data.begin_geldigheid[:10] }}</strong>
+                </div>
+                {% endif %}
+                {% if kadastrale_data.tijdstip_registratie %}
+                <div class="mb-2">
+                    <small class="text-muted">Registratie:</small><br>
+                    <strong>{{ kadastrale_data.tijdstip_registratie[:10] }}</strong>
+                </div>
+                {% endif %}
+                
+                <!-- Geometry Information -->
+                {% if kadastrale_data.geometry_available %}
+                <div class="mb-2">
+                    <small class="text-muted">Geometrie:</small><br>
+                    <span class="badge bg-success">Beschikbaar</span>
+                </div>
+                {% endif %}
+                
+                <!-- Data Quality -->
+                {% set data_quality = pdok_data.get('data_quality', {}).get('kadastrale_details', {}) %}
+                {% if data_quality %}
+                <h6 class="text-primary mb-3 mt-4">Data Kwaliteit</h6>
+                <div class="d-flex flex-wrap gap-1">
+                    {% if data_quality.has_parcel_id %}
+                    <span class="badge bg-success">Perceel ID</span>
+                    {% endif %}
+                    {% if data_quality.has_area %}
+                    <span class="badge bg-info">Oppervlakte</span>
+                    {% endif %}
+                    {% if data_quality.has_geometry %}
+                    <span class="badge bg-warning">Geometrie</span>
+                    {% endif %}
+                    {% if data_quality.parcel_status %}
+                    <span class="badge bg-primary">{{ data_quality.parcel_status }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- API Source Information -->
+        <div class="mt-3 pt-3 border-top">
             <div class="row">
                 <div class="col-md-6">
                     <small class="text-muted">
-                        <strong>Coördinaten:</strong><br>
-                        Lat: {{ "%.6f"|format(bag.latitude) }}, Lon: {{ "%.6f"|format(bag.longitude) }}
+                        <strong>Data Bron:</strong> BRK Kadastrale Kaart API<br>
+                        <strong>Laatst bijgewerkt:</strong> {{ pdok.last_updated.strftime('%d-%m-%Y %H:%M') }}
                     </small>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-6 text-end">
                     <small class="text-muted">
-                        <strong>BAG ID:</strong><br>
-                        {{ bag.adresseerbaarobjectid or 'Niet beschikbaar' }}
+                        <strong>API Endpoint:</strong><br>
+                        <code>api.pdok.nl/kadaster/brk-kadastrale-kaart/ogc/v1/</code>
                     </small>
                 </div>
             </div>
@@ -367,6 +706,8 @@
     </div>
 </div>
 {% endif %}
+
+<!-- Map Visualization Card is now replaced by the PDOK iframe section below -->
 
 <!-- Nieuwe Taxatie Modal -->
 <div class="modal fade" id="nieuweTaxatieModal" tabindex="-1">
@@ -554,6 +895,342 @@
                     <button type="submit" class="btn btn-danger">Verwijderen</button>
                 </form>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- WOZ Data Card -->
+{% set woz = dossier.woz_data[0] if dossier.woz_data else None %}
+<div class="card mb-3" id="woz-card" style="{% if not dossier.gebruiksdoel or 'woonfunctie' not in dossier.gebruiksdoel.lower() %}display:none;{% endif %}" 
+     data-adres="{{ dossier.adres }}" 
+     data-postcode="{{ dossier.postcode }}" 
+     data-plaats="{{ dossier.plaats }}" 
+     data-gebruiksdoel="{{ dossier.gebruiksdoel }}">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-building"></i> WOZ Data
+        </h5>
+        <button id="woz-refresh-btn" class="btn btn-outline-primary btn-sm" type="button">
+            <i class="bi bi-arrow-clockwise"></i> Verversen
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="woz-loading" style="display: none;">
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">WOZ data wordt opgehaald...</p>
+            </div>
+        </div>
+        <div id="woz-content">
+            {% if woz %}
+                <table class="table table-sm">
+                    <tbody>
+                        <tr><th>WOZ-objectnummer</th><td>{{ woz.wozobjectnummer }}</td></tr>
+                        <tr><th>Adres</th><td>{{ woz.straatnaam }} {{ woz.huisnummer }}{{ woz.huisletter }}{{ woz.huisnummertoevoeging }}, {{ woz.postcode }} {{ woz.woonplaatsnaam }}</td></tr>
+                        <tr><th>Openbare ruimte type</th><td>{{ woz.openbareruimtetype or '-' }}</td></tr>
+                        <tr><th>Gemeentecode</th><td>{{ woz.gemeentecode }}</td></tr>
+                        <tr><th>Grondoppervlakte</th><td>{{ woz.grondoppervlakte }} m²</td></tr>
+                        <tr><th>Kadastraal</th><td>{{ woz.kadastrale_gemeente_code }} {{ woz.kadastrale_sectie }} {{ woz.kadastraal_perceel_nummer }}</td></tr>
+                        <tr><th>Buurtnaam</th><td>{{ (woz.api_response_data | fromjson).get('buurtnaam', '-') }}</td></tr>
+                        <tr><th>Wijknaam</th><td>{{ (woz.api_response_data | fromjson).get('wijknaam', '-') }}</td></tr>
+                        <tr><th>Waterschapsnaam</th><td>{{ (woz.api_response_data | fromjson).get('waterschapsnaam', '-') }}</td></tr>
+                        <tr><th>Gekoppeld perceel</th><td>{{ (woz.api_response_data | fromjson).get('gekoppeld_perceel', '-') }}</td></tr>
+                        <tr><th>Laatst bijgewerkt</th><td>{{ woz.last_updated.strftime('%d-%m-%Y %H:%M') }}</td></tr>
+                    </tbody>
+                </table>
+                <b>WOZ-waarde historie:</b>
+                <ul>
+                {% for value in woz.woz_values %}
+                    <li>{{ value.peildatum.strftime('%Y-%m-%d') }}: € {{ value.vastgestelde_waarde | int | string | replace(',', '.') | int | string | replace('.', ',') }}</li>
+                {% endfor %}
+                </ul>
+                <details class="mt-3">
+                    <summary>Ruwe WOZ API-data (JSON)</summary>
+                    <pre style="max-height:300px;overflow:auto;background:#f8f9fa;border:1px solid #eee;padding:8px;">{{ woz.api_response_data | tojson(indent=2) }}</pre>
+                </details>
+            {% else %}
+                <span class="text-danger">Nog geen WOZ-data opgeslagen voor dit dossier. Klik op verversen.</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<!-- WalkScore Card -->
+{% set walkscore = dossier.walkscore_data[0] if dossier.walkscore_data else None %}
+<div class="card mb-3" id="walkscore-card" 
+     data-postcode="{{ dossier.postcode }}" 
+     data-huisnummer="{{ bag.huisnummer if bag and bag.huisnummer else '' }}"
+     data-huisletter="{{ bag.huisletter if bag and bag.huisletter else '' }}">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-walking"></i> WalkScore
+        </h5>
+        <button id="walkscore-refresh-btn" class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="tooltip" title="Klik om de laatste gegevens op te halen uit de externe databronnen.">
+            <i class="bi bi-arrow-clockwise"></i> Verversen
+        </button>
+    </div>
+    <div class="card-body">
+        <div id="walkscore-loading" style="display: none;">
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">WalkScore data wordt opgehaald...</p>
+            </div>
+        </div>
+        <div id="walkscore-content">
+            {% if not walkscore and not walkscore_api_key %}
+            <div class="alert alert-warning" role="alert">
+                <i class="bi bi-exclamation-triangle"></i> WalkScore API key is not configured. Vraag de beheerder om deze in te vullen bij de API-instellingen.
+            </div>
+            {% endif %}
+            {% if walkscore_error %}
+            <div class="alert alert-danger" role="alert">
+                <i class="bi bi-x-circle"></i> {{ walkscore_error }}
+            </div>
+            {% endif %}
+            {% if walkscore %}
+                <!-- WalkScore Display -->
+                <div class="walkscore-info">
+                    <h4 class="walkscore-title mb-3">
+                        <i class="bi bi-geo-alt-fill text-primary"></i>
+                        {{ walkscore.description }}
+                    </h4>
+                    
+                    <!-- Score Cards Row -->
+                    <div class="row g-3 mb-3">
+                        <!-- Walk Score Card -->
+                        <div class="col-md-4">
+                            <div class="score-card walkscore-card">
+                                <div class="score-icon">
+                                    <i class="bi bi-walking"></i>
+                                </div>
+                                <div class="score-content">
+                                    <div class="score-number {{ walkscore.walkscore | int | walkscore_color }}">
+                                        {{ walkscore.walkscore }}
+                                    </div>
+                                    <div class="score-label">Walk Score</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Transit Score Card -->
+                        {% if walkscore.transit_score %}
+                        <div class="col-md-4">
+                            <div class="score-card transit-card">
+                                <div class="score-icon">
+                                    <i class="bi bi-bus-front"></i>
+                                </div>
+                                <div class="score-content">
+                                    <div class="score-number transit-color">
+                                        {{ walkscore.transit_score }}
+                                    </div>
+                                    <div class="score-label">Transit Score</div>
+                                    {% if walkscore.transit_description %}
+                                    <div class="score-description">{{ walkscore.transit_description }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- Bike Score Card -->
+                        {% if walkscore.bike_score %}
+                        <div class="col-md-4">
+                            <div class="score-card bike-card">
+                                <div class="score-icon">
+                                    <i class="bi bi-bicycle"></i>
+                                </div>
+                                <div class="score-content">
+                                    <div class="score-number bike-color">
+                                        {{ walkscore.bike_score }}
+                                    </div>
+                                    <div class="score-label">Bike Score</div>
+                                    {% if walkscore.bike_description %}
+                                    <div class="score-description">{{ walkscore.bike_description }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Additional Info -->
+                    <div class="walkscore-details">
+                        {% if walkscore.snapped_lat and walkscore.snapped_lon %}
+                        <div class="detail-item">
+                            <i class="bi bi-geo-alt text-muted"></i>
+                            <span class="detail-label">Snapped Location:</span>
+                            <span class="detail-value">{{ "%.4f"|format(walkscore.snapped_lat) }}, {{ "%.4f"|format(walkscore.snapped_lon) }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="detail-item">
+                            <i class="bi bi-clock text-muted"></i>
+                            <span class="detail-label">Last Updated:</span>
+                            <span class="detail-value">{{ walkscore.last_updated.strftime('%d-%m-%Y %H:%M') }}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="walkscore-actions">
+                    {% if walkscore.ws_link %}
+                    <a href="{{ walkscore.ws_link }}" target="_blank" class="btn btn-primary btn-sm">
+                        <i class="bi bi-box-arrow-up-right"></i> View on WalkScore
+                    </a>
+                    {% endif %}
+                    {% if walkscore.more_info_link %}
+                    <a href="{{ walkscore.more_info_link }}" target="_blank" class="btn btn-outline-info btn-sm">
+                        <i class="bi bi-info-circle"></i> More Info
+                    </a>
+                    {% endif %}
+                    {% if walkscore.help_link %}
+                    <a href="{{ walkscore.help_link }}" target="_blank" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-question-circle"></i> How it Works
+                    </a>
+                    {% endif %}
+                </div>
+                <details class="mt-3">
+                    <summary>Ruwe WalkScore API-data (JSON)</summary>
+                    <pre style="max-height:300px;overflow:auto;background:#f8f9fa;border:1px solid #eee;padding:8px;">{{ walkscore.api_response_data | tojson(indent=2) }}</pre>
+                </details>
+            {% else %}
+                <div class="text-center">
+                    <div class="walkscore-placeholder">
+                        <i class="bi bi-walking text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-2">Nog geen WalkScore data beschikbaar</p>
+                        <p class="text-muted small">Klik op verversen om WalkScore data op te halen</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Kaart Card - Always visible -->
+<div class="card mb-3" id="kaart-card">
+    <div class="card-header">
+        <h5 class="card-title mb-0">
+            <i class="bi bi-geo-alt"></i> Locatie op Kaart
+        </h5>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <!-- Embedded Map Section -->
+            <div class="col-md-12 mb-3">
+                <h6><i class="bi bi-map"></i> Locatie Kaart</h6>
+                {% if (pdok and pdok.latitude and pdok.longitude) or (bag and bag.latitude and bag.longitude) %}
+                <!-- Map Layer Selector -->
+                <div class="mb-3">
+                    <label for="mapLayerSelector" class="form-label">Kaartlaag:</label>
+                    <select id="mapLayerSelector" class="form-select" style="width: auto; display: inline-block;">
+                        <option value="openstreetmap">OpenStreetMap</option>
+                        <option value="pdok">PDOK (Topografische Kaart)</option>
+                        <option value="pdok-luchtfoto">PDOK Luchtfoto</option>
+                        <option value="google-streets">Google Streets</option>
+                        <option value="google-satellite">Google Satellite</option>
+                        <option value="streetsmart" id="streetsmart-option" style="display: none;">🏢 StreetSmart</option>
+                    </select>
+                    <div id="streetsmart-status" class="mt-2" style="display: none;">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> <span id="streetsmart-message"></span>
+                        </small>
+                    </div>
+                </div>
+                
+                <!-- Simple embedded map viewer -->
+                <div id="simple-map" style="height: 400px; width: 100%; border: 1px solid #dee2e6; border-radius: 0.375rem; background: #f8f9fa;">
+                    {% if pdok and pdok.latitude and pdok.longitude %}
+                    <iframe 
+                        src="https://www.openstreetmap.org/export/embed.html?bbox={{ pdok.longitude|float - 0.003 }},{{ pdok.latitude|float - 0.003 }},{{ pdok.longitude|float + 0.003 }},{{ pdok.latitude|float + 0.003 }}&layer=mapnik&marker={{ pdok.latitude }},{{ pdok.longitude }}"
+                        style="border: 0; width: 100%; height: 100%; border-radius: 0.375rem;"
+                        frameborder="0"
+                        scrolling="no"
+                        marginheight="0"
+                        marginwidth="0">
+                    </iframe>
+                    {% elif bag and bag.latitude and bag.longitude %}
+                    <iframe 
+                        src="https://www.openstreetmap.org/export/embed.html?bbox={{ bag.longitude|float - 0.003 }},{{ bag.latitude|float - 0.003 }},{{ bag.longitude|float + 0.003 }},{{ bag.latitude|float + 0.003 }}&layer=mapnik&marker={{ bag.latitude }},{{ bag.longitude }}"
+                        style="border: 0; width: 100%; height: 100%; border-radius: 0.375rem;"
+                        frameborder="0"
+                        scrolling="no"
+                        marginheight="0"
+                        marginwidth="0">
+                    </iframe>
+                    {% endif %}
+                </div>
+                
+                <!-- Fallback: External map links -->
+                <div class="mt-3">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Externe Kaart Viewers</h6>
+                            <div class="btn-group-vertical w-100" role="group">
+                                {% if pdok and pdok.latitude and pdok.longitude %}
+                                <a href="https://www.openstreetmap.org/#map=18/{{ pdok.latitude }}/{{ pdok.longitude }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-map"></i> OpenStreetMap
+                                </a>
+                                {% elif bag.latitude and bag.longitude %}
+                                <a href="https://www.openstreetmap.org/#map=18/{{ bag.latitude }}/{{ bag.longitude }}" target="_blank" class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-map"></i> OpenStreetMap
+                                </a>
+                                {% endif %}
+                                {% if bag.x_coord and bag.y_coord %}
+                                <a href="https://app.pdok.nl/viewer/#x={{ bag.x_coord }}&y={{ bag.y_coord }}&z=16.0000&background=BRT_Achtergrondkaart_PDOK&layers=ad797d3c-0fb1-4a1a-a88b-1f1691765859;Kadastralekaart;_;1" target="_blank" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-geo"></i> PDOK Viewer
+                                </a>
+                                {% endif %}
+                                {% if pdok and pdok.latitude and pdok.longitude %}
+                                <a href="https://www.google.com/maps/place/{{ pdok.latitude }},{{ pdok.longitude }}" target="_blank" class="btn btn-outline-success btn-sm">
+                                    <i class="bi bi-geo-alt"></i> Google Maps
+                                </a>
+                                {% elif bag.latitude and bag.longitude %}
+                                <a href="https://www.google.com/maps/place/{{ bag.latitude }},{{ bag.longitude }}" target="_blank" class="btn btn-outline-success btn-sm">
+                                    <i class="bi bi-geo-alt"></i> Google Maps
+                                </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Locatie Informatie</h6>
+                            <div class="card">
+                                <div class="card-body py-2">
+                                    <p class="mb-1"><small><strong>Adres:</strong> {{ bag.straatnaam or 'Onbekend' }} {{ bag.huisnummer or '' }}{{ bag.huisletter or '' }}</small></p>
+                                    <p class="mb-1"><small><strong>Postcode:</strong> {{ bag.postcode or 'Onbekend' }}</small></p>
+                                    <p class="mb-1"><small><strong>Plaats:</strong> {{ bag.woonplaats or 'Onbekend' }}</small></p>
+                                    {% if pdok and pdok.latitude and pdok.longitude %}
+                                    <p class="mb-1"><small><strong>Coördinaten:</strong> {{ "%.6f"|format(pdok.latitude) }}, {{ "%.6f"|format(pdok.longitude) }} <span class="badge badge-sm bg-success">PDOK</span></small></p>
+                                    {% elif bag.latitude and bag.longitude %}
+                                    <p class="mb-1"><small><strong>Coördinaten:</strong> {{ "%.6f"|format(bag.latitude) }}, {{ "%.6f"|format(bag.longitude) }} <span class="badge badge-sm bg-secondary">BAG</span></small></p>
+                                    {% endif %}
+                                    {% if pdok and pdok.x_coord and pdok.y_coord %}
+                                    <p class="mb-0"><small><strong>RD:</strong> {{ "%.0f"|format(pdok.x_coord) }}, {{ "%.0f"|format(pdok.y_coord) }} <span class="badge badge-sm bg-success">PDOK</span></small></p>
+                                    {% elif bag.x_coord and bag.y_coord %}
+                                    <p class="mb-0"><small><strong>RD:</strong> {{ "%.0f"|format(bag.x_coord) }}, {{ "%.0f"|format(bag.y_coord) }} <span class="badge badge-sm bg-secondary">BAG</span></small></p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> Kaart is beschikbaar zodra BAG-gegevens zijn opgehaald.
+                    <br><small>Klik eerst op "Ophalen" bij de BAG-gegevens hierboven.</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <small class="text-muted">
+                <i class="bi bi-info-circle"></i> 
+                {% if bag.x_coord and bag.y_coord %}RD-coördinaten: {{ "%.0f"|format(bag.x_coord) }}, {{ "%.0f"|format(bag.y_coord) }} (BAG){% endif %}
+                {% if pdok and pdok.latitude and pdok.longitude %}{% if bag.x_coord and bag.y_coord %}<br>{% endif %}WGS84: {{ "%.6f"|format(pdok.latitude) }}, {{ "%.6f"|format(pdok.longitude) }} (PDOK){% elif bag.latitude and bag.longitude %}{% if bag.x_coord and bag.y_coord %}<br>{% endif %}WGS84: {{ "%.6f"|format(bag.latitude) }}, {{ "%.6f"|format(bag.longitude) }} (BAG){% endif %}
+                {% if not bag.x_coord and not bag.y_coord %}Geen coördinaten beschikbaar - haal eerst BAG-gegevens op{% endif %}
+            </small>
         </div>
     </div>
 </div>
@@ -795,6 +1472,108 @@ document.addEventListener('DOMContentLoaded', function() {
             bagContent: !!bagContent
         });
     }
+    
+    // PDOK Data verversen
+    const pdokCard = document.getElementById('pdok-card');
+    const pdokRefreshBtn = document.getElementById('pdok-refresh-btn');
+    const pdokLoading = document.getElementById('pdok-loading');
+    const pdokContent = document.getElementById('pdok-content');
+    const pdokJsonData = document.getElementById('pdok-json-data');
+    
+    if (pdokRefreshBtn && pdokCard && pdokLoading && pdokContent) {
+        pdokRefreshBtn.addEventListener('click', function() {
+            console.log('PDOK refresh button clicked');
+            pdokLoading.style.display = 'block';
+            pdokContent.style.display = 'none';
+            
+            // Get postcode and house number from data attributes
+            const postcode = pdokCard.getAttribute('data-postcode');
+            let huisnummer = pdokCard.getAttribute('data-huisnummer');
+            const huisletter = pdokCard.getAttribute('data-huisletter') || '';
+            
+            // If no huisnummer from data, try to extract from address
+            if (!huisnummer) {
+                const adres = pdokCard.getAttribute('data-adres');
+                if (adres) {
+                    // Extract house number from address (e.g., "Pippelingstraat 31" -> "31")
+                    const adresParts = adres.split(',')[0].split(' ');
+                    for (let part of adresParts) {
+                        // Remove common suffixes and check if it's a number
+                        const cleanPart = part.replace(/[-ABab]/g, '');
+                        if (cleanPart && !isNaN(cleanPart)) {
+                            huisnummer = cleanPart;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Debug logging
+            console.log('DEBUG PDOK JS: pdokCard data attributes:', {
+                postcode: pdokCard.getAttribute('data-postcode'),
+                huisnummer: huisnummer,
+                huisletter: huisletter,
+                adres: pdokCard.getAttribute('data-adres'),
+                plaats: pdokCard.getAttribute('data-plaats')
+            });
+            
+            if (!huisnummer) {
+                pdokLoading.style.display = 'none';
+                pdokContent.style.display = 'block';
+                pdokContent.innerHTML = '<span class="text-danger">Kon huisnummer niet bepalen uit adres</span>';
+                return;
+            }
+            
+            const dossierId = {{ dossier.id }};
+            
+            const requestData = { 
+                postcode: postcode, 
+                huisnummer: huisnummer, 
+                huisletter: huisletter, 
+                dossier_id: dossierId 
+            };
+            
+            console.log('DEBUG PDOK JS: Sending request data:', requestData);
+            
+            fetch('/api/pdok_lookup_and_save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData)
+            })
+            .then(resp => {
+                console.log('PDOK response status:', resp.status);
+                return resp.json();
+            })
+            .then(data => {
+                console.log('PDOK response data:', data);
+                pdokLoading.style.display = 'none';
+                pdokContent.style.display = 'block';
+                if (data.success) {
+                    // Update JSON data display if element exists
+                    if (pdokJsonData) {
+                        pdokJsonData.textContent = JSON.stringify(data.data, null, 2);
+                    }
+                    // Reload page to show updated data
+                    location.reload();
+                } else {
+                    pdokContent.innerHTML = '<span class="text-danger">' + (data.error || 'Fout bij ophalen PDOK-data') + '</span>';
+                }
+            })
+            .catch(err => {
+                console.error('PDOK error:', err);
+                pdokLoading.style.display = 'none';
+                pdokContent.style.display = 'block';
+                pdokContent.innerHTML = '<span class="text-danger">Fout bij ophalen PDOK-data: ' + err.message + '</span>';
+            });
+        });
+    } else {
+        console.log('PDOK elements not found:', {
+            pdokRefreshBtn: !!pdokRefreshBtn,
+            pdokCard: !!pdokCard,
+            pdokLoading: !!pdokLoading,
+            pdokContent: !!pdokContent
+        });
+    }
 
     // Taxatie verwijderen
     document.querySelectorAll('.delete-taxatie-btn').forEach(function(btn) {
@@ -809,129 +1588,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Map functionality
-    {% if bag and bag.latitude and bag.longitude %}
-    let map = null;
-    let marker = null;
-    let currentMapType = 'roadmap';
-
-    // Initialize map when page loads
-    document.addEventListener('DOMContentLoaded', function() {
-        initializeMap();
-    });
-
-    function initializeMap() {
-        const mapContainer = document.getElementById('property-map');
-        if (!mapContainer) return;
-
-        // Create map using OpenStreetMap
-        map = L.map('property-map').setView([{{ bag.latitude }}, {{ bag.longitude }}], 18);
-
-        // Add OpenStreetMap tiles
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors',
-            maxZoom: 19
-        }).addTo(map);
-
-        // Add marker for property
-        marker = L.marker([{{ bag.latitude }}, {{ bag.longitude }}]).addTo(map);
-        
-        // Add popup with property info
-        const popupContent = `
-            <div style="min-width: 200px;">
-                <h6><i class="bi bi-house"></i> {{ bag.straatnaam }} {{ bag.huisnummer }}{{ bag.huisletter or '' }}</h6>
-                <p class="mb-1"><strong>Postcode:</strong> {{ bag.postcode }}</p>
-                <p class="mb-1"><strong>Plaats:</strong> {{ bag.woonplaats }}</p>
-                {% if bag.bouwjaar %}
-                <p class="mb-1"><strong>Bouwjaar:</strong> {{ bag.bouwjaar }}</p>
-                {% endif %}
-                {% if bag.oppervlakte %}
-                <p class="mb-1"><strong>Oppervlakte:</strong> {{ bag.oppervlakte }} m²</p>
-                {% endif %}
-                {% if bag.gebruiksdoel %}
-                <p class="mb-0"><strong>Gebruiksdoel:</strong> {{ bag.gebruiksdoel }}</p>
-                {% endif %}
-            </div>
-        `;
-        marker.bindPopup(popupContent);
-
-        // Add building outline if geometry is available
-        {% if bag.geometrie %}
-        try {
-            const geometry = {{ bag.geometrie | safe }};
-            if (geometry && geometry.geometrie) {
-                const coordinates = geometry.geometrie.coordinates;
-                if (coordinates && coordinates.length > 0) {
-                    // Convert coordinates to Leaflet format (lat, lng)
-                    const latLngs = coordinates[0].map(coord => [coord[1], coord[0]]);
-                    
-                    // Add polygon for building outline
-                    const buildingOutline = L.polygon(latLngs, {
-                        color: '#0066cc',
-                        weight: 2,
-                        opacity: 0.8,
-                        fillColor: '#0066cc',
-                        fillOpacity: 0.2
-                    }).addTo(map);
-                    
-                    // Fit map to show both marker and building outline
-                    const group = L.featureGroup([marker, buildingOutline]);
-                    map.fitBounds(group.getBounds().pad(0.1));
-                }
-            }
-        } catch (e) {
-            console.log('Could not parse building geometry:', e);
-        }
-        {% endif %}
-    }
-
-    // Map type switching
-    document.getElementById('map-type-roadmap').addEventListener('click', function() {
-        switchMapType('roadmap');
-    });
-
-    document.getElementById('map-type-satellite').addEventListener('click', function() {
-        switchMapType('satellite');
-    });
-
-    function switchMapType(mapType) {
-        if (mapType === currentMapType) return;
-
-        // Remove existing tiles
-        map.eachLayer((layer) => {
-            if (layer instanceof L.TileLayer) {
-                map.removeLayer(layer);
-            }
-        });
-
-        // Add new tiles based on map type
-        if (mapType === 'satellite') {
-            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: '© Esri',
-                maxZoom: 19
-            }).addTo(map);
-        } else {
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '© OpenStreetMap contributors',
-                maxZoom: 19
-            }).addTo(map);
-        }
-
-        // Update button states
-        document.querySelectorAll('[data-map-type]').forEach(btn => {
-            btn.classList.remove('btn-primary');
-            btn.classList.add('btn-outline-secondary');
-        });
-        document.querySelector(`[data-map-type="${mapType}"]`).classList.remove('btn-outline-secondary');
-        document.querySelector(`[data-map-type="${mapType}"]`).classList.add('btn-primary');
-
-        currentMapType = mapType;
-    }
-
-    // Initialize button states
-    document.getElementById('map-type-roadmap').classList.add('btn-primary');
-    document.getElementById('map-type-roadmap').classList.remove('btn-outline-secondary');
-    {% endif %}
+    // Map functionality - moved to scripts block for proper timing
 
     // Find the WOZ card and check if any gebruiksdoel is 'woonfunctie'
     if (wozCard) {
@@ -943,6 +1600,633 @@ document.addEventListener('DOMContentLoaded', function() {
             wozCard.style.display = 'none';
         }
     }
+
+    // WalkScore Data verversen
+    const walkscoreCard = document.getElementById('walkscore-card');
+    const walkscoreRefreshBtn = document.getElementById('walkscore-refresh-btn');
+    const walkscoreLoading = document.getElementById('walkscore-loading');
+    const walkscoreContent = document.getElementById('walkscore-content');
+    
+    if (walkscoreRefreshBtn && walkscoreCard && walkscoreLoading && walkscoreContent) {
+        walkscoreRefreshBtn.addEventListener('click', function() {
+            console.log('WalkScore refresh button clicked');
+            walkscoreLoading.style.display = 'block';
+            walkscoreContent.style.display = 'none';
+            
+            // Get postcode and house number from data attributes
+            const postcode = walkscoreCard.getAttribute('data-postcode');
+            let huisnummer = walkscoreCard.getAttribute('data-huisnummer');
+            const huisletter = walkscoreCard.getAttribute('data-huisletter') || '';
+            
+            // If no huisnummer from BAG data, try to extract from address
+            if (!huisnummer) {
+                const adres = bagCard ? bagCard.getAttribute('data-adres') : '';
+                if (adres) {
+                    // Extract house number from address (e.g., "Pippelingstraat 31" -> "31")
+                    const adresParts = adres.split(',')[0].split(' ');
+                    for (let part of adresParts) {
+                        // Remove common suffixes and check if it's a number
+                        const cleanPart = part.replace(/[-ABab]/g, '');
+                        if (cleanPart && !isNaN(cleanPart)) {
+                            huisnummer = cleanPart;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            // Debug logging
+            console.log('DEBUG WalkScore JS: walkscoreCard data attributes:', {
+                postcode: postcode,
+                huisnummer: huisnummer,
+                huisletter: huisletter
+            });
+            
+            if (!huisnummer) {
+                walkscoreLoading.style.display = 'none';
+                walkscoreContent.style.display = 'block';
+                walkscoreContent.innerHTML = '<span class="text-danger">Kon huisnummer niet bepalen uit adres</span>';
+                return;
+            }
+            
+            const dossierId = {{ dossier.id }};
+            
+            const requestData = { 
+                postcode: postcode, 
+                huisnummer: huisnummer, 
+                huisletter: huisletter, 
+                dossier_id: dossierId 
+            };
+            
+            console.log('DEBUG WalkScore JS: Sending request data:', requestData);
+            
+            fetch('/api/walkscore_lookup_and_save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData)
+            })
+            .then(resp => {
+                console.log('WalkScore response status:', resp.status);
+                return resp.json();
+            })
+            .then(data => {
+                console.log('WalkScore response data:', data);
+                walkscoreLoading.style.display = 'none';
+                walkscoreContent.style.display = 'block';
+                if (data.success) {
+                    // Reload page to show updated data
+                    location.reload();
+                } else {
+                    walkscoreContent.innerHTML = '<span class="text-danger">' + (data.error || 'Fout bij ophalen WalkScore data') + '</span>';
+                }
+            })
+            .catch(err => {
+                console.error('WalkScore error:', err);
+                walkscoreLoading.style.display = 'none';
+                walkscoreContent.style.display = 'block';
+                walkscoreContent.innerHTML = '<span class="text-danger">Fout bij ophalen WalkScore data: ' + err.message + '</span>';
+            });
+        });
+    } else {
+        console.log('WalkScore elements not found:', {
+            walkscoreRefreshBtn: !!walkscoreRefreshBtn,
+            walkscoreCard: !!walkscoreCard,
+            walkscoreLoading: !!walkscoreLoading,
+            walkscoreContent: !!walkscoreContent
+        });
+    }
+
+    // Dossiernaam inline edit
+    const naamDisplay = document.getElementById('dossier-naam-display');
+    const editBtn = document.getElementById('edit-dossier-naam-btn');
+    const naamForm = document.getElementById('dossier-naam-form');
+    const naamInput = document.getElementById('dossier-naam-input');
+    const annuleerBtn = document.getElementById('annuleer-naam-btn');
+    if (editBtn && naamDisplay && naamForm && naamInput && annuleerBtn) {
+        editBtn.addEventListener('click', function() {
+            naamDisplay.style.display = 'none';
+            editBtn.style.display = 'none';
+            naamForm.classList.remove('d-none');
+            naamForm.style.display = 'inline';
+            naamInput.focus();
+        });
+        annuleerBtn.addEventListener('click', function() {
+            naamForm.classList.add('d-none');
+            naamForm.style.display = 'none';
+            naamDisplay.style.display = 'inline';
+            editBtn.style.display = 'inline-block';
+        });
+    }
+
+    // Bootstrap tooltips activeren
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.forEach(function (tooltipTriggerEl) {
+        new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Map initialization
+    function initMap() {
+        console.log('DEBUG: Starting map initialization...');
+        console.log('DEBUG: bag object:', {{ bag|tojson if bag else 'null' }});
+        console.log('DEBUG: pdok object:', {{ pdok|tojson if pdok else 'null' }});
+        {% if bag %}
+        console.log('DEBUG: bag.latitude:', {{ bag.latitude if bag.latitude else 'null' }});
+        console.log('DEBUG: bag.longitude:', {{ bag.longitude if bag.longitude else 'null' }});
+        console.log('DEBUG: bag.x_coord:', {{ bag.x_coord if bag.x_coord else 'null' }});
+        console.log('DEBUG: bag.y_coord:', {{ bag.y_coord if bag.y_coord else 'null' }});
+        {% endif %}
+        {% if pdok %}
+        console.log('DEBUG: pdok.latitude:', {{ pdok.latitude if pdok.latitude else 'null' }});
+        console.log('DEBUG: pdok.longitude:', {{ pdok.longitude if pdok.longitude else 'null' }});
+        console.log('DEBUG: pdok.x_coord:', {{ pdok.x_coord if pdok.x_coord else 'null' }});
+        console.log('DEBUG: pdok.y_coord:', {{ pdok.y_coord if pdok.y_coord else 'null' }});
+        {% endif %}
+        
+        const mapContainer = document.getElementById('simple-map');
+        if (!mapContainer) {
+            console.error('DEBUG: Map container not found');
+            return;
+        }
+        
+        console.log('DEBUG: Map container found');
+        
+        // Check if we have coordinates
+        {% if bag or pdok %}
+        const bagData = {{ bag|tojson if bag else 'null' }};
+        const pdokData = {{ pdok|tojson if pdok else 'null' }};
+        
+        // Prefer PDOK coordinates if available, fallback to BAG
+        const hasPdokWGS84 = pdokData && pdokData.latitude && pdokData.longitude;
+        const hasBagWGS84 = bagData && bagData.latitude && bagData.longitude;
+        const hasBagRD = bagData && bagData.x_coord && bagData.y_coord;
+        
+        console.log('DEBUG: Has PDOK WGS84 coordinates:', hasPdokWGS84);
+        console.log('DEBUG: Has BAG WGS84 coordinates:', hasBagWGS84);
+        console.log('DEBUG: Has BAG RD coordinates:', hasBagRD);
+        
+        if (!hasPdokWGS84 && !hasBagWGS84 && !hasBagRD) {
+            console.log('DEBUG: No coordinates available');
+            return;
+        }
+        {% else %}
+        console.log('DEBUG: No bag or pdok data available');
+        return;
+        {% endif %}
+        
+        // Check if Leaflet is available
+        if (typeof L === 'undefined') {
+            console.error('DEBUG: Leaflet not loaded, retrying...');
+            setTimeout(initMap, 500); // Retry after 500ms
+            return;
+        }
+        
+        console.log('DEBUG: Leaflet is available');
+        
+        try {
+            // Function to get coordinates based on selected layer
+            function getCoordinatesForLayer(layerType) {
+                // Always prefer PDOK coordinates if available
+                if (hasPdokWGS84) {
+                    console.log('DEBUG: Using PDOK WGS84 coordinates:', pdokData.latitude, pdokData.longitude);
+                    return [pdokData.latitude, pdokData.longitude];
+                } else if (hasBagWGS84) {
+                    console.log('DEBUG: Using BAG WGS84 coordinates:', bagData.latitude, bagData.longitude);
+                    return [bagData.latitude, bagData.longitude];
+                }
+                return null;
+            }
+            
+            // Get initial coordinates
+            let coords = getCoordinatesForLayer('openstreetmap');
+            if (!coords) {
+                throw new Error('No valid coordinates available');
+            }
+            
+            let lat = coords[0];
+            let lng = coords[1];
+            
+            console.log('DEBUG: Initial coordinates:', lat, lng);
+            
+            // Validate coordinates  
+            if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+                throw new Error('Invalid coordinates: ' + lat + ', ' + lng);
+            }
+            
+            // Validate coordinate ranges for Netherlands
+            if (lat < 50 || lat > 55 || lng < 3 || lng > 8) {
+                throw new Error('Coordinates outside Netherlands range: ' + lat + ', ' + lng);
+            }
+            
+            console.log('DEBUG: Creating map...');
+            
+            // Create map with error handling
+            const map = L.map('simple-map', {
+                zoomControl: true,
+                scrollWheelZoom: true,
+                doubleClickZoom: true,
+                boxZoom: true,
+                keyboard: true,
+                dragging: true,
+                tap: true,
+                touchZoom: true
+            }).setView([lat, lng], 17);
+            
+            console.log('DEBUG: Map created, setting up layers...');
+            
+            // Define map layers
+            const mapLayers = {
+                'openstreetmap': L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                    maxZoom: 19,
+                    minZoom: 10,
+                    errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+                }),
+                'pdok': L.tileLayer('https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png', {
+                    attribution: '© <a href="https://www.pdok.nl">PDOK</a>',
+                    maxZoom: 19,
+                    minZoom: 10
+                }),
+                'pdok-luchtfoto': L.tileLayer('https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_ortho25/EPSG:3857/{z}/{x}/{y}.jpeg', {
+                    attribution: '© <a href="https://www.pdok.nl">PDOK</a>',
+                    maxZoom: 19,
+                    minZoom: 10
+                }),
+                'google-streets': L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                    attribution: '© <a href="https://www.google.com/maps">Google</a>',
+                    maxZoom: 19,
+                    minZoom: 10
+                }),
+                'google-satellite': L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                    attribution: '© <a href="https://www.google.com/maps">Google</a>',
+                    maxZoom: 19,
+                    minZoom: 10
+                })
+            };
+            
+            // Add default layer (OpenStreetMap)
+            let currentLayer = mapLayers['openstreetmap'].addTo(map);
+            let currentMarker = L.marker([lat, lng]).addTo(map);
+            
+            console.log('DEBUG: Default layer added, setting up layer selector...');
+            
+            // Layer selector functionality
+            const layerSelector = document.getElementById('mapLayerSelector');
+            if (layerSelector) {
+                layerSelector.addEventListener('change', function() {
+                    const selectedLayer = this.value;
+                    console.log('DEBUG: Switching to layer:', selectedLayer);
+                    
+                    // Get coordinates for the selected layer
+                    const newCoords = getCoordinatesForLayer(selectedLayer);
+                    if (newCoords) {
+                        const newLat = newCoords[0];
+                        const newLng = newCoords[1];
+                        
+                        console.log('DEBUG: New coordinates for layer:', newLat, newLng);
+                        
+                        // Update map view
+                        map.setView([newLat, newLng], map.getZoom());
+                        
+                        // Update marker
+                        if (currentMarker) {
+                            map.removeLayer(currentMarker);
+                        }
+                        currentMarker = L.marker([newLat, newLng]).addTo(map);
+                        
+                        // Update popup with coordinate source info
+                        let popupText = '';
+                        {% if bag and bag.straatnaam and bag.huisnummer %}
+                        popupText = '{{ bag.straatnaam or "Onbekend" }} {{ bag.huisnummer or "" }}{{ bag.huisletter or "" }}<br>';
+                        {% endif %}
+                        
+                        // Show coordinate source info
+                        if (hasPdokWGS84) {
+                            popupText += '<small>WGS84: ' + pdokData.latitude.toFixed(6) + ', ' + pdokData.longitude.toFixed(6) + ' (PDOK)</small>';
+                        } else if (hasBagWGS84) {
+                            popupText += '<small>WGS84: ' + bagData.latitude.toFixed(6) + ', ' + bagData.longitude.toFixed(6) + ' (BAG)</small>';
+                            {% if bag and bag.x_coord and bag.y_coord %}
+                            popupText += '<br><small>RD: {{ bag.x_coord }}, {{ bag.y_coord }} (BAG)</small>';
+                            popupText += '<br><small><a href="https://app.pdok.nl/viewer/#x={{ bag.x_coord }}&y={{ bag.y_coord }}&z=16.0000&background=BRT_Achtergrondkaart_PDOK&layers=ad797d3c-0fb1-4a1a-a88b-1f1691765859;Kadastralekaart;_;1" target="_blank">Open in PDOK Viewer</a></small>';
+                            {% endif %}
+                        } else {
+                            popupText += '<small>Geen coördinaten beschikbaar</small>';
+                        }
+                        
+                        currentMarker.bindPopup(popupText).openPopup();
+                    } else {
+                        console.log('DEBUG: No coordinates available for layer:', selectedLayer);
+                    }
+                    
+                    // Remove current layer
+                    if (currentLayer) {
+                        map.removeLayer(currentLayer);
+                    }
+                    
+                    // Add new layer
+                    if (mapLayers[selectedLayer]) {
+                        currentLayer = mapLayers[selectedLayer].addTo(map);
+                    }
+                });
+            }
+            
+            console.log('DEBUG: Layer selector set up, adding initial popup...');
+            
+            // Add initial popup
+            {% if bag and bag.straatnaam and bag.huisnummer %}
+            let popupText = '{{ bag.straatnaam or "Onbekend" }} {{ bag.huisnummer or "" }}{{ bag.huisletter or "" }}<br>';
+            {% else %}
+            let popupText = 'Locatie<br>';
+            {% endif %}
+            
+            // Add coordinate info based on data source
+            if (hasPdokWGS84) {
+                popupText += '<small>WGS84: ' + pdokData.latitude.toFixed(6) + ', ' + pdokData.longitude.toFixed(6) + ' (PDOK)</small>';
+            } else if (hasBagWGS84) {
+                popupText += '<small>WGS84: ' + bagData.latitude.toFixed(6) + ', ' + bagData.longitude.toFixed(6) + ' (BAG)</small>';
+            } else {
+                popupText += '<small>WGS84: ' + lat.toFixed(6) + ', ' + lng.toFixed(6) + '</small>';
+            }
+            
+            currentMarker.bindPopup(popupText).openPopup();
+            
+            console.log('DEBUG: Map initialization complete!');
+            
+        } catch (error) {
+            console.error('DEBUG: Error creating map:', error);
+            mapContainer.innerHTML = '<div class="alert alert-danger m-2"><i class="bi bi-exclamation-triangle"></i> Fout bij laden kaart: ' + error.message + '<br><small>Gebruik de externe links hieronder om de locatie te bekijken.</small></div>';
+        }
+    }
+    
+    // Extract coordinates from template data
+    let templateLat = null;
+    let templateLng = null;
+    
+    {% if pdok and pdok.latitude and pdok.longitude %}
+    templateLat = {{ pdok.latitude }};
+    templateLng = {{ pdok.longitude }};
+    {% elif bag and bag.latitude and bag.longitude %}
+    templateLat = {{ bag.latitude }};
+    templateLng = {{ bag.longitude }};
+    {% endif %}
+    
+    // Start map initialization
+    initMap();
+    
+    // Check StreetSmart credentials and show/hide option
+    checkStreetSmartCredentials();
+    
+    // Handle map layer switching
+    const mapLayerSelector = document.getElementById('mapLayerSelector');
+    const simpleMap = document.getElementById('simple-map');
+    
+    if (mapLayerSelector && simpleMap) {
+        mapLayerSelector.addEventListener('change', function() {
+            const selectedLayer = this.value;
+            let lat, lng;
+            
+            // Get coordinates from existing iframe or data attributes
+            const iframe = simpleMap.querySelector('iframe');
+            if (iframe && iframe.src) {
+                // Extract coordinates from current iframe src
+                const urlParams = new URLSearchParams(iframe.src.split('?')[1]);
+                const marker = urlParams.get('marker');
+                const bbox = urlParams.get('bbox');
+                
+                if (marker) {
+                    [lat, lng] = marker.split(',').map(Number);
+                } else if (bbox) {
+                    // Calculate center from bbox
+                    const coords = bbox.split(',').map(Number);
+                    lat = (coords[1] + coords[3]) / 2;
+                    lng = (coords[0] + coords[2]) / 2;
+                }
+            }
+            
+            // Fallback to template coordinates
+            if (!lat || !lng) {
+                lat = templateLat;
+                lng = templateLng;
+            }
+            
+            if (lat && lng) {
+                let iframeSrc = '';
+                
+                switch (selectedLayer) {
+                    case 'openstreetmap':
+                        iframeSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.003},${lat - 0.003},${lng + 0.003},${lat + 0.003}&layer=mapnik&marker=${lat},${lng}`;
+                        break;
+                    case 'pdok':
+                        iframeSrc = `https://app.pdok.nl/viewer/app/default/index.html?extent=${lng - 0.003},${lat - 0.003},${lng + 0.003},${lat + 0.003}`;
+                        break;
+                    case 'pdok-luchtfoto':
+                        iframeSrc = `https://app.pdok.nl/viewer/app/luchtfoto/index.html?extent=${lng - 0.003},${lat - 0.003},${lng + 0.003},${lat + 0.003}`;
+                        break;
+                    case 'google-streets':
+                        iframeSrc = `https://maps.google.com/maps?q=${lat},${lng}&hl=nl&z=16&output=embed`;
+                        break;
+                    case 'google-satellite':
+                        iframeSrc = `https://maps.google.com/maps?q=${lat},${lng}&hl=nl&z=16&t=k&output=embed`;
+                        break;
+                    case 'streetsmart':
+                        handleStreetSmartLayer(lat, lng);
+                        return; // Don't update iframe src as StreetSmart handles its own display
+                    default:
+                        iframeSrc = `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.003},${lat - 0.003},${lng + 0.003},${lat + 0.003}&layer=mapnik&marker=${lat},${lng}`;
+                }
+                
+                // Update the iframe src
+                if (iframe) {
+                    iframe.src = iframeSrc;
+                }
+            }
+        });
+    }
+    
+    // Check StreetSmart credentials and show/hide option
+    function checkStreetSmartCredentials() {
+        fetch('/api/streetsmart_credentials')
+            .then(response => response.json())
+            .then(data => {
+                const streetsmartOption = document.getElementById('streetsmart-option');
+                const streetsmartStatus = document.getElementById('streetsmart-status');
+                const streetsmartMessage = document.getElementById('streetsmart-message');
+                
+                if (data.success && data.has_credentials) {
+                    // Show StreetSmart option
+                    streetsmartOption.style.display = 'block';
+                    streetsmartStatus.style.display = 'block';
+                    streetsmartMessage.textContent = `StreetSmart beschikbaar voor gebruiker: ${data.username}`;
+                    streetsmartMessage.className = 'text-success';
+                } else {
+                    // Hide StreetSmart option and show message
+                    streetsmartOption.style.display = 'none';
+                    streetsmartStatus.style.display = 'block';
+                    streetsmartMessage.innerHTML = `${data.message || 'Geen StreetSmart credentials gevonden.'} <a href="/profiel" class="text-decoration-none">Voeg ze toe in je profiel</a>.`;
+                    streetsmartMessage.className = 'text-muted';
+                }
+            })
+            .catch(error => {
+                console.error('Error checking StreetSmart credentials:', error);
+                const streetsmartOption = document.getElementById('streetsmart-option');
+                const streetsmartStatus = document.getElementById('streetsmart-status');
+                const streetsmartMessage = document.getElementById('streetsmart-message');
+                
+                streetsmartOption.style.display = 'none';
+                streetsmartStatus.style.display = 'block';
+                streetsmartMessage.textContent = 'Fout bij controleren StreetSmart credentials';
+                streetsmartMessage.className = 'text-danger';
+            });
+    }
+    
+    // Handle StreetSmart layer display
+    function handleStreetSmartLayer(lat, lng) {
+        const simpleMap = document.getElementById('simple-map');
+        if (!simpleMap) return;
+        
+        // Clear existing iframe
+        simpleMap.innerHTML = '';
+        
+        // Create StreetSmart viewer container
+        const streetsmartContainer = document.createElement('div');
+        streetsmartContainer.style.width = '100%';
+        streetsmartContainer.style.height = '400px';
+        streetsmartContainer.style.position = 'relative';
+        streetsmartContainer.style.border = '1px solid #dee2e6';
+        streetsmartContainer.style.borderRadius = '0.375rem';
+        streetsmartContainer.style.background = '#f8f9fa';
+        
+        // Show loading message
+        streetsmartContainer.innerHTML = `
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">StreetSmart wordt geladen...</p>
+            </div>
+        `;
+        
+        simpleMap.appendChild(streetsmartContainer);
+        
+        // Initialize StreetSmart viewer
+        initStreetSmartViewer(streetsmartContainer, lat, lng);
+    }
+    
+    // Initialize StreetSmart viewer (placeholder - would need actual StreetSmart API integration)
+    function initStreetSmartViewer(container, lat, lng) {
+        // This is a placeholder implementation
+        // In a real implementation, you would use the StreetSmart API
+        // with the user's credentials to initialize the viewer
+        
+        setTimeout(() => {
+            container.innerHTML = `
+                <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center;">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <h6>StreetSmart Viewer</h6>
+                        <p>Locatie: ${lat.toFixed(6)}, ${lng.toFixed(6)}</p>
+                        <p><small>StreetSmart API integratie vereist volledige implementatie met credentials.</small></p>
+                        <a href="https://www.cyclomedia.com/nl/street-smart" target="_blank" class="btn btn-primary btn-sm">
+                            <i class="bi bi-box-arrow-up-right"></i> Open StreetSmart
+                        </a>
+                    </div>
+                </div>
+            `;
+        }, 1000);
+    }
+    
+    // Auto-refresh PDOK data if no data exists
+    function autoRefreshPDOKData() {
+        const pdokCard = document.getElementById('pdok-card');
+        const pdokContent = document.getElementById('pdok-content');
+        
+        if (!pdokCard || !pdokContent) return;
+        
+        // Check if PDOK data already exists using the data attribute
+        const hasPdokData = pdokCard.getAttribute('data-has-pdok-data') === 'true';
+        
+        if (!hasPdokData) {
+            console.log('Auto-refreshing PDOK data (no data found)');
+            
+            // Get postcode and house number from data attributes
+            const postcode = pdokCard.getAttribute('data-postcode');
+            let huisnummer = pdokCard.getAttribute('data-huisnummer');
+            const huisletter = pdokCard.getAttribute('data-huisletter') || '';
+            
+            // If no huisnummer from data, try to extract from address
+            if (!huisnummer) {
+                const adres = pdokCard.getAttribute('data-adres');
+                if (adres) {
+                    const adresParts = adres.split(',')[0].split(' ');
+                    for (let part of adresParts) {
+                        const cleanPart = part.replace(/[-ABab]/g, '');
+                        if (cleanPart && !isNaN(cleanPart)) {
+                            huisnummer = cleanPart;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            if (!huisnummer) {
+                console.log('Cannot auto-refresh PDOK data: no house number found');
+                return;
+            }
+            
+            const dossierId = {{ dossier.id }};
+            
+            const requestData = { 
+                postcode: postcode, 
+                huisnummer: huisnummer, 
+                huisletter: huisletter, 
+                dossier_id: dossierId 
+            };
+            
+            console.log('Auto-refreshing PDOK data with:', requestData);
+            
+            // Show loading state
+            const pdokLoading = document.getElementById('pdok-loading');
+            if (pdokLoading) {
+                pdokLoading.style.display = 'block';
+                pdokContent.style.display = 'none';
+            }
+            
+            fetch('/api/pdok_lookup_and_save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData)
+            })
+            .then(resp => resp.json())
+            .then(data => {
+                console.log('PDOK auto-refresh response:', data);
+                if (pdokLoading) {
+                    pdokLoading.style.display = 'none';
+                    pdokContent.style.display = 'block';
+                }
+                if (data.success) {
+                    // Update the data attribute to prevent further auto-refreshes
+                    pdokCard.setAttribute('data-has-pdok-data', 'true');
+                    // Reload page to show updated data
+                    location.reload();
+                } else {
+                    console.log('PDOK auto-refresh failed:', data.error);
+                    // Don't show error to user for auto-refresh, just log it
+                }
+            })
+            .catch(err => {
+                console.error('PDOK auto-refresh error:', err);
+                if (pdokLoading) {
+                    pdokLoading.style.display = 'none';
+                    pdokContent.style.display = 'block';
+                }
+                // Don't show error to user for auto-refresh, just log it
+            });
+        } else {
+            console.log('PDOK data already exists, skipping auto-refresh');
+        }
+    }
+    
+    // Auto-refresh PDOK data after page load with a small delay
+    setTimeout(autoRefreshPDOKData, 1000);
 });
 </script>
 {% endblock %} 

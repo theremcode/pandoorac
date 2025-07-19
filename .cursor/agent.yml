@@ -912,6 +912,198 @@ commands:
                                 required: true
                             required: true
                         required: true
+                  walkscore_integration:
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        description: Enable WalkScore integration for property walkability assessment
+                        required: true
+                      api_integration:
+                        type: object
+                        properties:
+                          walkscore_api:
+                            type: object
+                            properties:
+                              base_url:
+                                type: string
+                                description: Base URL for WalkScore API
+                                default: https://api.walkscore.com/score
+                              address_lookup:
+                                type: boolean
+                                description: Use address-based lookup for WalkScore
+                                required: true
+                              transit_integration:
+                                type: boolean
+                                description: Include transit score in API requests
+                                required: true
+                              bike_integration:
+                                type: boolean
+                                description: Include bike score in API requests
+                                required: true
+                            required: true
+                          bag_integration:
+                            type: object
+                            properties:
+                              automatic_trigger:
+                                type: boolean
+                                description: Automatically trigger WalkScore lookup when BAG address is retrieved
+                                required: true
+                              address_validation:
+                                type: boolean
+                                description: Validate address format before WalkScore API call
+                                required: true
+                            required: true
+                        required: true
+                      database_storage:
+                        type: object
+                        properties:
+                          walkscore_data_table:
+                            type: object
+                            properties:
+                              table_name:
+                                type: string
+                                description: Database table name for WalkScore data
+                                default: walkscore_data
+                              fields:
+                                type: array
+                                items:
+                                  type: object
+                                  properties:
+                                    name:
+                                      type: string
+                                      required: true
+                                    type:
+                                      type: string
+                                      required: true
+                                    description:
+                                      type: string
+                                      required: true
+                                required: true
+                              walkscore_fields:
+                                type: array
+                                items:
+                                  type: string
+                                  enum: [walkscore, description, logo_url, more_info_link, ws_link, help_link]
+                                required: true
+                              transit_fields:
+                                type: array
+                                items:
+                                  type: string
+                                  enum: [transit_score, transit_description, transit_summary]
+                                required: true
+                              bike_fields:
+                                type: array
+                                items:
+                                  type: string
+                                  enum: [bike_score, bike_description]
+                                required: true
+                              location_fields:
+                                type: array
+                                items:
+                                  type: string
+                                  enum: [snapped_lat, snapped_lon]
+                                required: true
+                            required: true
+                          dossier_relation:
+                            type: boolean
+                            description: Link WalkScore data to dossier records
+                            required: true
+                        required: true
+                      ui_components:
+                        type: object
+                        properties:
+                          dossier_detail_card:
+                            type: object
+                            properties:
+                              display_name:
+                                type: string
+                                description: Card title for WalkScore display
+                                default: WalkScore
+                              position:
+                                type: string
+                                enum: [after_bag_data, after_woz_data, separate_section]
+                                description: Position of WalkScore card in dossier detail view
+                                required: true
+                              visual_display:
+                                type: object
+                                properties:
+                                  score_circle:
+                                    type: boolean
+                                    description: Display WalkScore in a circular visual element
+                                    required: true
+                                  color_coding:
+                                    type: boolean
+                                    description: Color-code WalkScore based on value ranges
+                                    required: true
+                                  transit_display:
+                                    type: boolean
+                                    description: Show transit score with badge
+                                    required: true
+                                  bike_display:
+                                    type: boolean
+                                    description: Show bike score with badge
+                                    required: true
+                                required: true
+                            required: true
+                          loading_states:
+                            type: object
+                            properties:
+                              api_call_indicator:
+                                type: boolean
+                                description: Show loading indicator during WalkScore API calls
+                                required: true
+                              error_handling:
+                                type: boolean
+                                description: Display user-friendly error messages for API failures
+                                required: true
+                              fallback_display:
+                                type: boolean
+                                description: Show alternative content when WalkScore data unavailable
+                                required: true
+                            required: true
+                        required: true
+                      api_workflow:
+                        type: object
+                        properties:
+                          address_processing:
+                            type: object
+                            properties:
+                              postcode_extraction:
+                                type: boolean
+                                description: Extract postcode from dossier or BAG data
+                                required: true
+                              huisnummer_extraction:
+                                type: boolean
+                                description: Extract house number from dossier or BAG data
+                                required: true
+                              huisletter_extraction:
+                                type: boolean
+                                description: Extract house letter from dossier or BAG data
+                                required: true
+                              address_formatting:
+                                type: boolean
+                                description: Format address string for WalkScore API
+                                required: true
+                            required: true
+                          data_retrieval:
+                            type: object
+                            properties:
+                              api_request:
+                                type: boolean
+                                description: Make API request to WalkScore service
+                                required: true
+                              data_parsing:
+                                type: boolean
+                                description: Parse and validate WalkScore API response data
+                                required: true
+                              error_recovery:
+                                type: boolean
+                                description: Implement retry logic for failed API calls
+                                required: true
+                            required: true
+                        required: true
+                    required: true
                       map_providers:
                         type: object
                         properties:
@@ -1295,9 +1487,47 @@ commands:
                       api_url:
                         type: string
                         required: true
-                        default: https://api.walkscore.com/score?format=json&address=…&lat=…&lon=…&wsapikey=YOUR_API_KEY
+                        default: https://api.walkscore.com/score
                       api_key:
                         type: string
+                        required: true
+                      address_lookup:
+                        type: object
+                        properties:
+                          postcode_required:
+                            type: boolean
+                            description: Postcode is required for WalkScore lookup
+                            required: true
+                          huisnummer_required:
+                            type: boolean
+                            description: House number is required for WalkScore lookup
+                            required: true
+                          huisletter_optional:
+                            type: boolean
+                            description: House letter is optional for WalkScore lookup
+                            required: true
+                          address_format:
+                            type: string
+                            description: Format for building address string
+                            default: "{huisnummer} {huisletter} {postcode}"
+                            required: true
+                        required: true
+                      api_features:
+                        type: object
+                        properties:
+                          transit_score:
+                            type: boolean
+                            description: Include transit score in API request
+                            required: true
+                          bike_score:
+                            type: boolean
+                            description: Include bike score in API request
+                            required: true
+                          timeout:
+                            type: number
+                            description: API request timeout in seconds
+                            default: 30
+                            required: true
                         required: true
                     required: true
                   woz_waardeloket:

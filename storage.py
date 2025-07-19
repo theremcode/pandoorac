@@ -16,7 +16,19 @@ class StorageService:
             self.init_app(app)
 
     def init_app(self, app):
-        self.storage_type = app.config.get('STORAGE_TYPE', 'local')
+        # Try to get storage type from database first, then fall back to app config
+        try:
+            # Import here to avoid circular imports
+            from app import get_setting
+            storage_type = get_setting('STORAGE_TYPE')
+            if storage_type:
+                self.storage_type = storage_type
+            else:
+                self.storage_type = app.config.get('STORAGE_TYPE', 'minio')
+        except:
+            # If database is not available yet, use app config
+            self.storage_type = app.config.get('STORAGE_TYPE', 'minio')
+        
         print(f"Storage type: {self.storage_type}")
         
         if self.storage_type == 'local':
@@ -26,11 +38,19 @@ class StorageService:
             os.makedirs(self.upload_folder, exist_ok=True)
         elif self.storage_type == 'minio':
             try:
-                # Try to initialize MinIO
-                minio_endpoint = app.config.get('MINIO_ENDPOINT')
-                minio_access_key = app.config.get('MINIO_ACCESS_KEY')
-                minio_secret_key = app.config.get('MINIO_SECRET_KEY')
-                minio_bucket = app.config.get('MINIO_BUCKET', 'pandoorac')
+                # Try to get MinIO settings from database first
+                try:
+                    from app import get_setting
+                    minio_endpoint = get_setting('MINIO_ENDPOINT') or app.config.get('MINIO_ENDPOINT')
+                    minio_access_key = get_setting('MINIO_ACCESS_KEY') or app.config.get('MINIO_ACCESS_KEY')
+                    minio_secret_key = get_setting('MINIO_SECRET_KEY') or app.config.get('MINIO_SECRET_KEY')
+                    minio_bucket = get_setting('MINIO_BUCKET') or app.config.get('MINIO_BUCKET', 'pandoorac-local')
+                except:
+                    # Fall back to app config if database not available
+                    minio_endpoint = app.config.get('MINIO_ENDPOINT')
+                    minio_access_key = app.config.get('MINIO_ACCESS_KEY')
+                    minio_secret_key = app.config.get('MINIO_SECRET_KEY')
+                    minio_bucket = app.config.get('MINIO_BUCKET', 'pandoorac-local')
                 
                 if minio_endpoint and minio_access_key and minio_secret_key:
                     print(f"Initializing MinIO storage: {minio_endpoint}")
@@ -42,8 +62,20 @@ class StorageService:
                         region_name='us-east-1'  # MinIO default
                     )
                     self.bucket_name = minio_bucket
-                    # Test connection
-                    self.s3_client.head_bucket(Bucket=self.bucket_name)
+                    
+                    # Ensure bucket exists, create if it doesn't
+                    try:
+                        self.s3_client.head_bucket(Bucket=self.bucket_name)
+                        print(f"MinIO bucket '{self.bucket_name}' exists")
+                    except Exception as e:
+                        print(f"MinIO bucket '{self.bucket_name}' does not exist, creating it...")
+                        try:
+                            self.s3_client.create_bucket(Bucket=self.bucket_name)
+                            print(f"MinIO bucket '{self.bucket_name}' created successfully")
+                        except Exception as create_error:
+                            print(f"Failed to create MinIO bucket: {create_error}")
+                            raise create_error
+                    
                     print("MinIO storage initialized successfully")
                 else:
                     print("MinIO configuration incomplete, falling back to local storage")

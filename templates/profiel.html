@@ -40,6 +40,25 @@
                         </div>
                         
                         <hr>
+                        <h6>StreetSmart Account</h6>
+                        <p class="text-muted small">Optioneel: Voer je StreetSmart account gegevens in voor automatische integratie</p>
+                        
+                        <div class="mb-3">
+                            <label for="streetsmart_username" class="form-label">StreetSmart Gebruikersnaam</label>
+                            <input type="text" class="form-control" id="streetsmart_username" name="streetsmart_username" value="{{ user.streetsmart_username or '' }}" placeholder="Je StreetSmart inlognaam">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="streetsmart_password" class="form-label">StreetSmart Wachtwoord</label>
+                            <input type="password" class="form-control" id="streetsmart_password" name="streetsmart_password" placeholder="{% if user.streetsmart_password_hash %}••••••••{% else %}Je StreetSmart wachtwoord{% endif %}">
+                            {% if user.streetsmart_password_hash %}
+                            <div class="form-text">
+                                <i class="bi bi-shield-check text-success"></i> StreetSmart wachtwoord is opgeslagen (laat leeg om te behouden)
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <hr>
                         <h6>Wachtwoord wijzigen</h6>
                         
                         <div class="mb-3">

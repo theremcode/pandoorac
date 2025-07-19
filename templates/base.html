@@ -29,6 +29,222 @@
         .flash-messages {
             margin-top: 1rem;
         }
+        
+        /* WalkScore Fancy Styles */
+        .walkscore-main-circle {
+            position: relative;
+            margin: 0 auto;
+            width: 200px;
+            height: 200px;
+        }
+        
+        .walkscore-circle-bg {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .walkscore-circle-bg::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: shimmer 3s ease-in-out infinite;
+        }
+        
+        @keyframes shimmer {
+            0%, 100% { transform: rotate(0deg); }
+            50% { transform: rotate(180deg); }
+        }
+        
+        .walkscore-number {
+            font-size: 3.5rem;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 0.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .walkscore-label {
+            font-size: 1rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.25rem;
+        }
+        
+        .walkscore-category {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            text-align: center;
+            max-width: 120px;
+        }
+        
+        .walkscore-title {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        
+        .walkscore-title i {
+            margin-right: 0.5rem;
+        }
+        
+        .score-card {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            border: 1px solid #e9ecef;
+            transition: all 0.3s ease;
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+        
+        .score-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+        }
+        
+        .walkscore-card {
+            border-left: 4px solid #28a745;
+        }
+        
+        .transit-card {
+            border-left: 4px solid #007bff;
+        }
+        
+        .bike-card {
+            border-left: 4px solid #ffc107;
+        }
+        
+        .score-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .walkscore-card .score-icon {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+        
+        .transit-card .score-icon {
+            background: linear-gradient(135deg, #007bff, #6610f2);
+            color: white;
+        }
+        
+        .bike-card .score-icon {
+            background: linear-gradient(135deg, #ffc107, #fd7e14);
+            color: white;
+        }
+        
+        .score-content {
+            flex: 1;
+        }
+        
+        .score-number {
+            font-size: 2rem;
+            font-weight: 700;
+            line-height: 1;
+            margin-bottom: 0.25rem;
+        }
+        
+        .score-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #6c757d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .score-description {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: 0.25rem;
+        }
+        
+        .walkscore-details {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        
+        .detail-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        .detail-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .detail-item i {
+            width: 20px;
+            margin-right: 0.5rem;
+        }
+        
+        .detail-label {
+            font-weight: 600;
+            color: #495057;
+            margin-right: 0.5rem;
+            min-width: 120px;
+        }
+        
+        .detail-value {
+            color: #6c757d;
+            font-family: 'Courier New', monospace;
+        }
+        
+        .walkscore-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+        
+        .walkscore-actions .btn {
+            border-radius: 20px;
+            padding: 0.5rem 1rem;
+            font-weight: 500;
+        }
+        
+        .walkscore-placeholder {
+            padding: 3rem 1rem;
+        }
+        
+        .walkscore-placeholder i {
+            opacity: 0.3;
+        }
+        
+        /* Color classes for different score ranges */
+        .text-green-600 { color: #28a745 !important; }
+        .text-green-500 { color: #20c997 !important; }
+        .text-yellow-600 { color: #ffc107 !important; }
+        .text-orange-500 { color: #fd7e14 !important; }
+        .text-red-500 { color: #dc3545 !important; }
+        
+        .transit-color { color: #007bff !important; }
+        .bike-color { color: #ffc107 !important; }
     </style>
 </head>
 <body>

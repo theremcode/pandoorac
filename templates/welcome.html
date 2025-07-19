@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-10">
+            <!-- Welcome Card -->
+            <div class="card border-success mb-4">
+                <div class="card-header bg-success text-white">
+                    <h3 class="mb-0">
+                        <i class="bi bi-house-heart"></i> 
+                        Welkom bij PandoorAC, {{ current_user.full_name or current_user.username }}!
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h5 class="text-success">
+                                <i class="bi bi-check-circle"></i> 
+                                Je bent succesvol ingelogd!
+                            </h5>
+                            <p class="lead">
+                                PandoorAC is jouw platform voor het beheren van vastgoedtaxaties. 
+                                Hier kun je eenvoudig dossiers aanmaken, taxaties uitvoeren en al je gegevens centraal beheren.
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <i class="bi bi-building" style="font-size: 4rem; color: #198754;"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Start Guide -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-rocket-takeoff"></i> 
+                        Snelstartgids
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Step 1 -->
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100 border-primary">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                                            <strong>1</strong>
+                                        </div>
+                                        <h5 class="mb-0">Dossier Aanmaken</h5>
+                                    </div>
+                                    <p class="text-muted">
+                                        Een dossier is een verzameling van alle informatie over een specifiek pand. 
+                                        Start met het invoeren van het adres.
+                                    </p>
+                                    <div class="border-start border-primary border-3 ps-3">
+                                        <small class="text-muted">
+                                            <i class="bi bi-lightbulb"></i> 
+                                            <strong>Tip:</strong> Gebruik de automatische adresopzoekfunctie voor snelle invoer.
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2 -->
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100 border-success">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center mb-3">
+                                        <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                                            <strong>2</strong>
+                                        </div>
+                                        <h5 class="mb-0">Taxatie Toevoegen</h5>
+                                    </div>
+                                    <p class="text-muted">
+                                        Binnen een dossier kun je meerdere taxaties maken. 
+                                        Elke taxatie bevat specifieke waarderingen en documenten.
+                                    </p>
+                                    <div class="border-start border-success border-3 ps-3">
+                                        <small class="text-muted">
+                                            <i class="bi bi-lightbulb"></i> 
+                                            <strong>Tip:</strong> Upload foto's en documenten om je taxatie compleet te maken.
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Additional Features -->
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card bg-light">
+                                <div class="card-body">
+                                    <h6 class="card-title">
+                                        <i class="bi bi-star"></i> 
+                                        Extra Functies
+                                    </h6>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <i class="bi bi-map text-primary me-2"></i>
+                                                <small>Automatische BAG & WOZ gegevens</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <i class="bi bi-walking text-success me-2"></i>
+                                                <small>Walkscore integratie</small>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <i class="bi bi-camera text-info me-2"></i>
+                                                <small>StreetSmart straatbeelden</small>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <a href="{{ url_for('nieuw_dossier') }}" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-plus-circle"></i> 
+                        Mijn Eerste Dossier Aanmaken
+                    </a>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <a href="{{ url_for('dossiers') }}" class="btn btn-outline-secondary btn-lg w-100">
+                        <i class="bi bi-folder"></i> 
+                        Naar Dossiers Overzicht
+                    </a>
+                </div>
+            </div>
+
+            <!-- Help Section -->
+            <div class="card border-info">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-question-circle"></i> 
+                        Hulp Nodig?
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>Handige Links</h6>
+                            <ul class="list-unstyled">
+                                <li>
+                                    <a href="{{ url_for('profiel') }}" class="text-decoration-none">
+                                        <i class="bi bi-person-gear"></i> Profiel Beheren
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ url_for('dossiers') }}" class="text-decoration-none">
+                                        <i class="bi bi-folder"></i> Alle Dossiers
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>Eerste Stappen</h6>
+                            <ol class="small">
+                                <li>Maak je eerste dossier aan</li>
+                                <li>Voeg een taxatie toe</li>
+                                <li>Upload relevante documenten</li>
+                                <li>Gebruik de automatische waarderingsfuncties</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .card {
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        border: 1px solid rgba(0, 0, 0, 0.125);
+    }
+    
+    .card-header {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    }
+    
+    .btn-lg {
+        padding: 0.75rem 1.25rem;
+        font-size: 1.1rem;
+    }
+    
+    .border-3 {
+        border-width: 3px !important;
+    }
+</style>
+{% endblock %}

@@ -15,9 +15,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         gcc \
         g++ \
-    libpq-dev \
-    postgresql-client \
+        libpq-dev \
+        postgresql-client \
         curl \
+        libmagic1 \
+        libmagic-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
