@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 class Config:
     # Common settings
@@ -7,6 +8,16 @@ class Config:
     # URL scheme configuration for HTTPS proxy
     PREFERRED_URL_SCHEME = os.environ.get('PREFERRED_URL_SCHEME', 'http')
     SERVER_NAME = os.environ.get('SERVER_NAME', None)
+
+    # Session configuration for HTTPS proxy
+    SESSION_COOKIE_SECURE = PREFERRED_URL_SCHEME == 'https'
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    SESSION_PERMANENT = False
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=24)
+    
+    # Proxy configuration
+    FORCE_HTTPS = True
     
     # Database settings - Local SQLite for development
     def get_database_url():
