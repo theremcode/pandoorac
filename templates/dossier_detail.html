@@ -371,7 +371,7 @@
                                     <li>
                                         <span class="dropdown-item-text small text-muted">
                                             <i class="bi bi-info-circle"></i> 
-                                            Grootte: {{ (document.file_size / 1024) | round(1) if document.file_size else '?' }} KB
+                                            Grootte: ? KB
                                         </span>
                                     </li>
                                 </ul>
@@ -386,12 +386,14 @@
                     <small class="text-muted">
                         <i class="bi bi-files"></i> 
                         Totaal {{ dossier.documents|length }} document{{ 's' if dossier.documents|length != 1 else '' }}
+                        {# File size not available in Document model
                         {% if dossier.documents %}
                         {% set total_size = dossier.documents | sum(attribute='file_size') if dossier.documents[0].file_size else 0 %}
                         {% if total_size > 0 %}
                         - {{ (total_size / 1024 / 1024) | round(1) }} MB
                         {% endif %}
                         {% endif %}
+                        #}
                     </small>
                 </div>
                 {% else %}

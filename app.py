@@ -3193,7 +3193,8 @@ def get_dossier_documents(dossier_id):
         documents_list = sorted(dossier.documents, key=lambda x: x.uploaded_at, reverse=True)
         for document in documents_list:
             file_type_display = document.file_type.split('/')[-1].upper() if document.file_type else ''
-            file_size_kb = round(document.file_size / 1024, 1) if document.file_size else '?'
+            # Bestandsgrootte is momenteel niet beschikbaar
+            file_size_kb = '?'
             
             documents_html += f'''
             <div class="list-group-item">
@@ -3257,9 +3258,10 @@ def get_dossier_documents(dossier_id):
         # Document statistieken
         total_docs = len(dossier.documents)
         total_size_mb = 0
-        if dossier.documents and dossier.documents[0].file_size:
-            total_size = sum(doc.file_size for doc in dossier.documents if doc.file_size)
-            total_size_mb = round(total_size / 1024 / 1024, 1)
+        # Note: file_size is niet beschikbaar in Document model
+        # if dossier.documents and dossier.documents[0].file_size:
+        #     total_size = sum(doc.file_size for doc in dossier.documents if doc.file_size)
+        #     total_size_mb = round(total_size / 1024 / 1024, 1)
         
         documents_html += f'''
         <div class="mt-3 pt-2 border-top">

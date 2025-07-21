@@ -12,6 +12,8 @@ from jinja2 import Environment, FileSystemLoader
 import requests
 from io import BytesIO
 import base64
+from urllib.parse import urlencode
+import math
 
 
 class PDFReportService:
@@ -86,64 +88,209 @@ class PDFReportService:
             except Exception as e:
                 current_app.logger.warning(f"Kon WOZ data niet ophalen: {e}")
         
-        # Kaart URL genereren
+        # Kaart snapshot genereren
         try:
-            data['kaart_url'] = self._generate_map_url(dossier)
+            data['kaart_snapshot'] = self._generate_map_snapshot(dossier)
         except Exception as e:
-            current_app.logger.warning(f"Kon kaart URL niet genereren: {e}")
+            current_app.logger.warning(f"Kon kaart snapshot niet genereren: {e}")
+            data['kaart_snapshot'] = None
         
         return data
     
     def _get_bag_data(self, dossier):
-        """Haal BAG data op via de bestaande service"""
+        """Haal BAG data direct uit de database"""
         try:
-            from bag_service import BagService
-            bag_service = BagService()
-            
-            # Probeer BAG data op te halen
-            full_address = f"{dossier.adres}, {dossier.postcode} {dossier.plaats}"
-            bag_data = bag_service.get_bag_info(full_address)
-            
-            return bag_data
+            # Haal BAG data direct uit de database via de relationship
+            if dossier.bag_data:
+                bag = dossier.bag_data[0]  # Neem de eerste BAG entry
+                
+                # Structureer de data zoals verwacht door het template
+                bag_data = {
+                    'adresseerbaarobjectid': bag.adresseerbaarobjectid,
+                    'nummeraanduidingid': bag.nummeraanduidingid,
+                    'pand_id': bag.pand_id,
+                    'straatnaam': bag.straatnaam,
+                    'huisnummer': bag.huisnummer,
+                    'huisletter': bag.huisletter,
+                    'postcode': bag.postcode,
+                    'woonplaats': bag.woonplaats,
+                    'bouwjaar': bag.bouwjaar,
+                    'oppervlakte': bag.oppervlakte,
+                    'inhoud': bag.inhoud,
+                    'hoogte': bag.hoogte,
+                    'aantal_bouwlagen': bag.aantal_bouwlagen,
+                    'gebruiksdoel': bag.gebruiksdoel,
+                    'centroide_ll': bag.centroide_ll,
+                    'centroide_rd': bag.centroide_rd,
+                    'geometrie': bag.geometrie,
+                    'latitude': bag.latitude,
+                    'longitude': bag.longitude,
+                    'x_coord': bag.x_coord,
+                    'y_coord': bag.y_coord,
+                    'google_maps_url': bag.google_maps_url,
+                    'last_updated': bag.last_updated.isoformat() if bag.last_updated else None
+                }
+                
+                current_app.logger.info(f"BAG data uit database gehaald voor dossier {dossier.id}")
+                return bag_data
+            else:
+                current_app.logger.info(f"Geen BAG data gevonden voor dossier {dossier.id}")
+                return None
+                
         except Exception as e:
-            current_app.logger.error(f"BAG data ophalen mislukt: {e}")
+            current_app.logger.error(f"BAG data uit database halen mislukt: {e}")
             return None
     
     def _get_woz_data(self, dossier):
-        """Haal WOZ data op via de bestaande service"""
+        """Haal WOZ data direct uit de database"""
         try:
-            from woz_service import WozService
-            woz_service = WozService()
-            
-            # Probeer WOZ data op te halen
-            full_address = f"{dossier.adres}, {dossier.postcode} {dossier.plaats}"
-            woz_data = woz_service.get_woz_data(full_address)
-            
-            return woz_data
+            # Haal WOZ data direct uit de database via de relationship
+            if dossier.woz_data:
+                woz = dossier.woz_data[0]  # Neem de eerste WOZ entry
+                
+                # Structureer de data zoals verwacht door het template
+                woz_data = {
+                    'woz_data': {
+                        'wozobjectnummer': woz.wozobjectnummer,
+                        'woonplaatsnaam': woz.woonplaatsnaam,
+                        'openbareruimtenaam': woz.openbareruimtenaam,
+                        'openbareruimtetype': woz.openbareruimtetype,
+                        'straatnaam': woz.straatnaam,
+                        'postcode': woz.postcode,
+                        'huisnummer': woz.huisnummer,
+                        'huisletter': woz.huisletter,
+                        'huisnummertoevoeging': woz.huisnummertoevoeging,
+                        'gemeentecode': woz.gemeentecode,
+                        'grondoppervlakte': woz.grondoppervlakte,
+                        'adresseerbaarobjectid': woz.adresseerbaarobjectid,
+                        'nummeraanduidingid': woz.nummeraanduidingid,
+                        'kadastrale_gemeente_code': woz.kadastrale_gemeente_code,
+                        'kadastrale_sectie': woz.kadastrale_sectie,
+                        'kadastraal_perceel_nummer': woz.kadastraal_perceel_nummer
+                    },
+                    'woz_values': []
+                }
+                
+                # Voeg WOZ waarden toe
+                for woz_value in woz.woz_values:
+                    woz_data['woz_values'].append({
+                        'peildatum': woz_value.peildatum.strftime('%Y-%m-%d') if woz_value.peildatum else None,
+                        'vastgestelde_waarde': woz_value.vastgestelde_waarde
+                    })
+                
+                # Sorteer WOZ waarden op peildatum (nieuwste eerst)
+                woz_data['woz_values'].sort(key=lambda x: x['peildatum'] if x['peildatum'] else '', reverse=True)
+                
+                current_app.logger.info(f"WOZ data uit database gehaald voor dossier {dossier.id}")
+                return woz_data
+            else:
+                current_app.logger.info(f"Geen WOZ data gevonden voor dossier {dossier.id}")
+                return None
+                
         except Exception as e:
-            current_app.logger.error(f"WOZ data ophalen mislukt: {e}")
+            current_app.logger.error(f"WOZ data uit database halen mislukt: {e}")
             return None
     
-    def _generate_map_url(self, dossier):
-        """Genereer een statische kaart URL"""
-        # Gebruik PDOK voor Nederlandse kaarten
-        base_url = "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0"
-        
-        # Approximeer coördinaten op basis van postcode (basis implementatie)
-        # In productie zou je dit via geocoding services doen
-        lat, lon = self._approximate_coordinates(dossier.postcode)
-        
-        # Genereer eenvoudige kaart URL (dit is een placeholder)
-        # In productie zou je een echte mapping service gebruiken
-        map_url = f"https://via.placeholder.com/400x300/f0f0f0/333333?text=Kaart+{dossier.postcode}"
-        
-        return map_url
+    def _generate_map_snapshot(self, dossier):
+        """Genereer een kaart snapshot voor het rapport"""
+        try:
+            # Probeer eerst PDOK data (nauwkeuriger)
+            if dossier.pdok_data:
+                pdok = dossier.pdok_data[0]
+                if pdok.latitude and pdok.longitude:
+                    lat, lon = float(pdok.latitude), float(pdok.longitude)
+                    current_app.logger.info(f"PDOK coördinaten gevonden: {lat}, {lon}")
+                    return self._create_static_map(lat, lon, dossier.adres, "PDOK")
+            
+            # Probeer dan BAG data
+            if dossier.bag_data:
+                bag = dossier.bag_data[0]
+                if bag.latitude and bag.longitude:
+                    lat, lon = float(bag.latitude), float(bag.longitude)
+                    current_app.logger.info(f"BAG coördinaten gevonden: {lat}, {lon}")
+                    return self._create_static_map(lat, lon, dossier.adres, "BAG")
+            
+            current_app.logger.warning(f"Geen coördinaten beschikbaar voor dossier {dossier.id}")
+            return None
+            
+        except Exception as e:
+            current_app.logger.error(f"Fout bij genereren kaart snapshot: {e}")
+            return None
     
-    def _approximate_coordinates(self, postcode):
-        """Approximeer coördinaten (placeholder)"""
-        # Dit is een zeer simpele implementatie
-        # In productie zou je een echte geocoding service gebruiken
-        return 52.1326, 5.2913  # Utrecht centrum als fallback
+    def _create_static_map(self, lat, lon, address, source):
+        """Maak een statische kaart image voor PDF embedding"""
+        try:
+            # Gebruik OpenStreetMap tiles via een statische map service
+            # We gebruiken de OSM Static Maps API
+            width, height = 600, 400
+            zoom = 16
+            
+            # Probeer verschillende static map services
+            image_data = None
+            
+            # 1. Probeer eerst OpenTopoMap (gratis, geen API key nodig)
+            try:
+                # OpenTopoMap static map service
+                map_url = f"https://tile.opentopomap.org/{zoom}/{self._deg2num(lat, lon, zoom)[0]}/{self._deg2num(lat, lon, zoom)[1]}.png"
+                current_app.logger.info(f"Proberen OpenTopoMap: {map_url}")
+                
+                response = requests.get(map_url, timeout=10)
+                if response.status_code == 200 and len(response.content) > 1000:
+                    image_data = base64.b64encode(response.content).decode('utf-8')
+                    current_app.logger.info("OpenTopoMap kaart succesvol gedownload")
+            except Exception as e:
+                current_app.logger.warning(f"OpenTopoMap mislukt: {e}")
+            
+            # 2. Als OpenTopoMap niet werkt, probeer een eenvoudige tile combinatie
+            if not image_data:
+                try:
+                    # Gebruik OSM tiles direct
+                    tile_x, tile_y = self._deg2num(lat, lon, zoom)
+                    map_url = f"https://tile.openstreetmap.org/{zoom}/{tile_x}/{tile_y}.png"
+                    
+                    current_app.logger.info(f"Proberen OSM tile: {map_url}")
+                    
+                    response = requests.get(map_url, timeout=10, headers={
+                        'User-Agent': 'PandooracTaxatieApp/1.0'
+                    })
+                    
+                    if response.status_code == 200 and len(response.content) > 1000:
+                        image_data = base64.b64encode(response.content).decode('utf-8')
+                        current_app.logger.info("OSM tile succesvol gedownload")
+                except Exception as e:
+                    current_app.logger.warning(f"OSM tile mislukt: {e}")
+            
+            # 3. Als alle opties mislukken, maak een eenvoudige placeholder
+            if not image_data:
+                current_app.logger.warning("Alle kaart services mislukt, gebruik placeholder")
+                return {
+                    'coordinates': {'lat': lat, 'lon': lon},
+                    'center_address': address,
+                    'source': source,
+                    'map_reference': f"Locatie: {lat:.6f}, {lon:.6f}",
+                    'zoom': zoom
+                }
+            
+            return {
+                'image_data': image_data,
+                'coordinates': {'lat': lat, 'lon': lon},
+                'center_address': address,
+                'source': source,
+                'zoom': zoom
+            }
+            
+        except Exception as e:
+            current_app.logger.error(f"Fout bij maken statische kaart: {e}")
+            return None
+    
+    def _deg2num(self, lat_deg, lon_deg, zoom):
+        """Converteer lat/lon naar tile nummers voor OSM tiles"""
+        import math
+        lat_rad = math.radians(lat_deg)
+        n = 2.0 ** zoom
+        x = int((lon_deg + 180.0) / 360.0 * n)
+        y = int((1.0 - math.asinh(math.tan(lat_rad)) / math.pi) / 2.0 * n)
+        return (x, y)
     
     def _generate_html(self, data, is_woonfunctie):
         """Genereer HTML content voor het rapport"""
