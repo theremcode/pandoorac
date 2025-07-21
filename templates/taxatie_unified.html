@@ -1,0 +1,646 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Taxatie Bewerken' if taxatie else 'Nieuwe Taxatie' }} - {{ dossier.naam }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="card-title mb-0">
+                        <i class="bi bi-{{ 'pencil-square' if taxatie else 'plus-circle' }}"></i> 
+                        {{ 'Taxatie Bewerken' if taxatie else 'Nieuwe Taxatie' }}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <strong>Dossier:</strong> {{ dossier.naam }}<br>
+                        <strong>Adres:</strong> {{ dossier.adres }}, {{ dossier.postcode }} {{ dossier.plaats }}
+                    </div>
+
+                    {% if taxatie and not taxatie.can_edit() %}
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>Let op:</strong> Deze taxatie heeft de status "definitief" en kan niet bewerkt worden. 
+                        Wijzig eerst de status om bewerking mogelijk te maken.
+                    </div>
+                    {% endif %}
+
+                    <!-- UNIFIED FORM START -->
+                    <!-- Pandgegevens kaart bovenaan -->
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="card-title mb-0">
+                                <i class="bi bi-house"></i> Pandgegevens
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <strong>Adres:</strong> {{ dossier.adres }}<br>
+                                    <strong>Postcode:</strong> {{ dossier.postcode }}<br>
+                                    <strong>Plaats:</strong> {{ dossier.plaats }}
+                                </div>
+                                <div class="col-md-6">
+                                    <strong>Bouwjaar:</strong> {{ dossier.bouwjaar or '-' }}<br>
+                                    <strong>Oppervlakte:</strong> {{ dossier.oppervlakte or '-' }} m²<br>
+                                    <strong>Inhoud:</strong> {{ dossier.inhoud or '-' }} m³<br>
+                                    <strong>Hoogte:</strong> {{ dossier.hoogte or '-' }} m<br>
+                                    <strong>Aantal bouwlagen:</strong> {{ dossier.aantal_bouwlagen or '-' }}<br>
+                                    <strong>Gebruiksdoel:</strong> {{ dossier.gebruiksdoel or '-' }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <form method="POST" action="{{ action_url }}" enctype="multipart/form-data" 
+                          id="taxatieForm" 
+                          data-woonfunctie="{{ 'true' if dossier.gebruiksdoel and 'woonfunctie' in dossier.gebruiksdoel.lower() else 'false' }}">
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="datum" class="form-label">Datum *</label>
+                                    <input type="date" class="form-control" id="datum" name="datum" required
+                                        value="{{ taxatie.datum.strftime('%Y-%m-%d') if taxatie and taxatie.datum else date.today().strftime('%Y-%m-%d') }}"
+                                        {% if taxatie and not taxatie.can_edit() %}disabled{% endif %}>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="taxateur" class="form-label">Taxateur *</label>
+                                    <input type="text" class="form-control" id="taxateur" name="taxateur" required
+                                        value="{{ taxatie.taxateur if taxatie else (current_user.full_name or current_user.username) }}"
+                                        {% if taxatie and not taxatie.can_edit() %}disabled{% endif %}>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="oppervlakte" class="form-label">Oppervlakte (m²) *</label>
+                                    <input type="number" step="0.01" class="form-control" id="oppervlakte" name="oppervlakte"
+                                        value="{{ taxatie.oppervlakte if taxatie and taxatie.oppervlakte else dossier.oppervlakte if dossier else '' }}"
+                                        {% if taxatie and not taxatie.can_edit() %}disabled{% endif %}>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="hoogte_meters" class="form-label">Hoogte (m)</label>
+                                    <input type="number" step="0.01" class="form-control" id="hoogte_meters" name="hoogte_meters"
+                                        value="{{ taxatie.hoogte_meters if taxatie and taxatie.hoogte_meters else dossier.hoogte if dossier and dossier.hoogte else '2.6' }}"
+                                        {% if taxatie and not taxatie.can_edit() %}disabled{% endif %}>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="prijs_per_m2" class="form-label">Prijs per m² (€)</label>
+                                    <input type="number" step="0.01" class="form-control" id="prijs_per_m2" name="prijs_per_m2"
+                                        value="{{ taxatie.prijs_per_m2 if taxatie and taxatie.prijs_per_m2 else '' }}"
+                                        {% if taxatie and not taxatie.can_edit() %}disabled{% endif %}>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="prijs_per_m3" class="form-label">Prijs per m³ (€)</label>
+                                    <input type="number" step="0.01" class="form-control" id="prijs_per_m3" name="prijs_per_m3"
+                                        value="{{ taxatie.prijs_per_m3 if taxatie and taxatie.prijs_per_m3 else '' }}"
+                                        {% if taxatie and not taxatie.can_edit() %}disabled{% endif %}>
+                                    <div class="form-text">Voor woonfuncties: wordt automatisch berekend uit WOZ-waarde, maar kan worden aangepast</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-12">
+                                <div class="alert alert-info">
+                                    <strong>Automatisch berekend subtotaal:</strong> €<span id="subtotaalDisplay">{{ "{:,.2f}".format(taxatie.subtotaal_waarde or 0).replace(',', 'X').replace('.', ',').replace('X', '.') if taxatie else "0,00" }}</span>
+                                    <br><small class="text-muted" id="berekeningDetails"></small>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="subtotaal_waarde" class="form-label">Subtotaal Waarde (€)</label>
+                            <input type="number" step="0.01" class="form-control" id="subtotaal_waarde" name="subtotaal_waarde"
+                                value="{{ taxatie.subtotaal_waarde if taxatie else '' }}"
+                                {% if taxatie and not taxatie.can_edit() %}disabled{% endif %}>
+                            <div class="form-text">Dit is de basiswaarde voordat aanpassingen worden toegepast.</div>
+                        </div>
+                        
+                        <!-- WAARDEAANPASSINGEN SECTIE -->
+                        <div class="card mb-3">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                <h6 class="card-title mb-0">
+                                    <i class="bi bi-plus-circle"></i> Waardeaanpassingen
+                                </h6>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="addAanpassingBtn" 
+                                        {% if taxatie and not taxatie.can_edit() %}disabled{% endif %}>
+                                    <i class="bi bi-plus"></i> Voeg veld toe
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div id="aanpassingenContainer">
+                                    <!-- Load existing adjustments if editing -->
+                                    {% if taxatie %}
+                                        {% set aanpassingen = taxatie.get_aanpassingen() %}
+                                        {% for aanpassing in aanpassingen %}
+                                        <div class="row mb-3 aanpassing-row">
+                                            <div class="col-md-8">
+                                                <label class="form-label">Aanpassing - Beschrijving</label>
+                                                <input type="text" class="form-control aanpassing-naam" name="aanpassing_naam[]"
+                                                    value="{{ aanpassing.naam }}"
+                                                    placeholder="Bijv. Onderhoudsstaat, Locatie bonus, etc."
+                                                    {% if not taxatie.can_edit() %}disabled{% endif %}>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <label class="form-label">Percentage (%)</label>
+                                                <input type="number" step="0.01" class="form-control aanpassing-percentage" name="aanpassing_percentage[]"
+                                                    value="{{ aanpassing.percentage }}"
+                                                    placeholder="0.0"
+                                                    {% if not taxatie.can_edit() %}disabled{% endif %}>
+                                            </div>
+                                            <div class="col-md-1">
+                                                <label class="form-label">&nbsp;</label>
+                                                <button type="button" class="btn btn-sm btn-outline-danger d-block removeAanpassingBtn" 
+                                                        {% if not taxatie.can_edit() %}disabled{% endif %}>
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    {% endif %}
+                                </div>
+                                
+                                {% if not taxatie or taxatie.can_edit() %}
+                                <div class="text-center mt-3" id="emptyAanpassingenMessage" 
+                                     {% if taxatie and taxatie.get_aanpassingen() %}style="display: none;"{% endif %}>
+                                    <p class="text-muted">Nog geen waardeaanpassingen toegevoegd</p>
+                                    <button type="button" class="btn btn-outline-primary" id="addFirstAanpassingBtn">
+                                        <i class="bi bi-plus"></i> Voeg eerste aanpassing toe
+                                    </button>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="alert alert-secondary mt-3">
+                                    <strong>Totale aanpassingen:</strong> <span id="totaleAanpassingen">0,00%</span><br>
+                                    <strong>Aanpassingsbedrag:</strong> €<span id="aanpassingsBedrag">0,00</span><br>
+                                    <strong>Eindwaarde (automatisch berekend):</strong> <span id="eindwaardeDisplay" class="fw-bold text-success">€{{ "{:,.2f}".format(taxatie.waarde or 0).replace(',', 'X').replace('.', ',').replace('X', '.') if taxatie else "0,00" }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="waarde" class="form-label">Eindwaarde (€) *</label>
+                            <input type="number" step="0.01" class="form-control" id="waarde" name="waarde" required
+                                value="{{ taxatie.waarde if taxatie else '' }}"
+                                {% if taxatie and not taxatie.can_edit() %}disabled{% endif %}>
+                            <div class="form-text">Dit is de uiteindelijke taxatiewaarde inclusief alle aanpassingen.</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="opmerkingen" class="form-label">Opmerkingen</label>
+                            <textarea class="form-control" id="opmerkingen" name="opmerkingen" rows="3" 
+                                      {% if taxatie and not taxatie.can_edit() %}disabled{% endif %}>{{ taxatie.opmerkingen if taxatie else '' }}</textarea>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="photos" class="form-label">Foto's</label>
+                            <input type="file" class="form-control" id="photos" name="photos" multiple accept="image/*" 
+                                   {% if taxatie and not taxatie.can_edit() %}disabled{% endif %}>
+                            <div class="form-text">Selecteer meerdere foto's voor deze taxatie.</div>
+                        </div>
+                        
+                        {% if taxatie and taxatie.photos %}
+                        <div class="mb-3">
+                            <label class="form-label">Bestaande Foto's</label>
+                            <div class="row">
+                                {% for photo in taxatie.photos %}
+                                <div class="col-md-3 mb-2">
+                                    <img src="{{ url_for('get_photo', photo_id=photo.id) }}" alt="Foto" class="img-thumbnail" style="max-height: 100px;">
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <input type="hidden" id="berekening_methode" name="berekening_methode" value="{{ taxatie.berekening_methode if taxatie else '' }}">
+                        
+                        <div class="d-flex justify-content-end">
+                            <a href="{{ url_for('dossier_detail', dossier_id=dossier.id) }}" class="btn btn-secondary me-2">Annuleren</a>
+                            {% if not taxatie or taxatie.can_edit() %}
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-check-circle"></i> {{ 'Opslaan' if taxatie else 'Taxatie Aanmaken' }}
+                                </button>
+                            {% endif %}
+                        </div>
+                    </form>
+                    <!-- UNIFIED FORM END -->
+                </div>
+            </div>
+        </div>
+
+        <!-- SIDEBAR VOOR NIEUWE TAXATIES (WOZ) - ALLEEN VOOR WOONFUNCTIES -->
+        {% if not taxatie and dossier.gebruiksdoel and 'woonfunctie' in dossier.gebruiksdoel.lower() %}
+        <div class="col-md-4">
+            <div class="card mb-3" id="woz-comparison-card" 
+                 data-adres="{{ dossier.adres }}" 
+                 data-postcode="{{ dossier.postcode }}" 
+                 data-plaats="{{ dossier.plaats }}" 
+                 data-gebruiksdoel="{{ dossier.gebruiksdoel }}">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-building"></i> WOZ Vergelijking
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="woz-loading" style="display: none;">
+                        <div class="text-center">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">WOZ data wordt opgehaald...</p>
+                        </div>
+                    </div>
+                    <div id="woz-comparison-content">
+                        <!-- WOZ comparison data will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- STATUS MODALS VOOR BEWERK MODE -->
+{% if taxatie %}
+<!-- Status Change Modal -->
+<div class="modal fade" id="statusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Status Wijzigen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Huidige status: <strong>{{ taxatie.status }}</strong></p>
+                <form method="POST" action="{{ url_for('wijzig_taxatie_status', dossier_id=dossier.id, taxatie_id=taxatie.id) }}">
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Nieuwe Status</label>
+                        <select class="form-select" id="status" name="status" required>
+                            <option value="">Selecteer status...</option>
+                            <option value="concept" {% if taxatie.status == 'concept' %}selected{% endif %}>Concept</option>
+                            <option value="definitief" {% if taxatie.status == 'definitief' %}selected{% endif %}>Definitief</option>
+                            <option value="gearchiveerd" {% if taxatie.status == 'gearchiveerd' %}selected{% endif %}>Gearchiveerd</option>
+                        </select>
+                    </div>
+                    <div class="d-flex justify-content-end">
+                        <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">Annuleren</button>
+                        <button type="submit" class="btn btn-primary">Status Wijzigen</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<!-- UNIFIED JAVASCRIPT - CORRECTE IMPLEMENTATIE -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const isEditMode = {{ 'true' if taxatie else 'false' }};
+    const canEdit = {{ 'true' if not taxatie or taxatie.can_edit() else 'false' }};
+    
+    // ===== HULPFUNCTIES =====
+    function formatEuro(bedrag) {
+        return bedrag.toLocaleString('nl-NL', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    }
+    
+    function formatPercentage(percentage) {
+        return percentage.toLocaleString('nl-NL', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }) + '%';
+    }
+    
+    // ===== AUTO-BEREKENING PRIJS PER M³ UIT WOZ =====
+    function berekenPrijsPerM3VanuitWoz(wozWaarde) {
+        const form = document.querySelector('#taxatieForm');
+        const oppervlakte = parseFloat(form.querySelector('#oppervlakte').value) || 0;
+        const hoogte = parseFloat(form.querySelector('#hoogte_meters').value) || 2.6;
+        const prijsPerM3Input = form.querySelector('#prijs_per_m3');
+        
+        if (oppervlakte > 0 && hoogte > 0 && wozWaarde > 0 && prijsPerM3Input) {
+            // Bereken prijs per m³: WOZ waarde / (oppervlakte × hoogte)
+            const volume = oppervlakte * hoogte;
+            const prijsPerM3 = wozWaarde / volume;
+            
+            // Vul het veld in (alleen als het nog leeg is)
+            if (!prijsPerM3Input.value || parseFloat(prijsPerM3Input.value) === 0) {
+                prijsPerM3Input.value = prijsPerM3.toFixed(2);
+                
+                // Voeg een informatief bericht toe
+                const wozCard = document.getElementById('woz-comparison-card');
+                if (wozCard) {
+                    const content = document.getElementById('woz-comparison-content');
+                    if (content) {
+                        content.innerHTML += `<br><div class="alert alert-info mt-2 p-2">
+                            <small><strong>Auto-berekend:</strong><br>
+                            Prijs per m³: €${formatEuro(prijsPerM3)}<br>
+                            (€${formatEuro(wozWaarde)} ÷ ${oppervlakte}m² × ${hoogte}m)</small>
+                        </div>`;
+                    }
+                }
+                
+                // Trigger automatische herberekening
+                berekenSubtotaalAutomatisch();
+            }
+        }
+    }
+    
+    // ===== AUTOMATISCHE SUBTOTAAL BEREKENING =====
+    function berekenSubtotaalAutomatisch() {
+        const form = document.querySelector('#taxatieForm');
+        const oppervlakte = parseFloat(form.querySelector('#oppervlakte').value) || 0;
+        const hoogte = parseFloat(form.querySelector('#hoogte_meters').value) || 2.6;
+        const prijsPerM2 = parseFloat(form.querySelector('#prijs_per_m2').value) || 0;
+        const prijsPerM3 = parseFloat(form.querySelector('#prijs_per_m3').value) || 0;
+        const subtotaalInput = form.querySelector('#subtotaal_waarde');
+        const subtotaalDisplay = document.querySelector('#subtotaalDisplay');
+        const berekeningDetails = document.querySelector('#berekeningDetails');
+        
+        const isWoonfunctie = form.getAttribute('data-woonfunctie') === 'true';
+        
+        let subtotaal = 0;
+        let details = '';
+        
+        if (oppervlakte > 0) {
+            if (isWoonfunctie && prijsPerM3 > 0) {
+                const volume = oppervlakte * hoogte;
+                subtotaal = volume * prijsPerM3;
+                details = `${oppervlakte} m² × ${hoogte} m × €${formatEuro(prijsPerM3)}/m³`;
+            } else if (!isWoonfunctie && prijsPerM2 > 0) {
+                subtotaal = oppervlakte * prijsPerM2;
+                details = `${oppervlakte} m² × €${formatEuro(prijsPerM2)}/m²`;
+            }
+        }
+        
+        // Update subtotaal
+        subtotaalInput.value = subtotaal.toFixed(2);
+        subtotaalDisplay.textContent = formatEuro(subtotaal);
+        berekeningDetails.textContent = details;
+        
+        // Trigger eindwaarde berekening
+        berekenEindwaarde();
+    }
+    
+    // ===== AANPASSINGEN BEHEER =====
+    function initAanpassingenBeheer() {
+        const existingAanpassingen = document.querySelectorAll('.aanpassing-row');
+        
+        updateEmptyMessage();
+        
+        // Event listeners
+        const addBtn = document.getElementById('addAanpassingBtn');
+        const addFirstBtn = document.getElementById('addFirstAanpassingBtn');
+        
+        if (addBtn) addBtn.addEventListener('click', addAanpassingVeld);
+        if (addFirstBtn) addFirstBtn.addEventListener('click', addAanpassingVeld);
+        
+        // Existing remove buttons
+        document.querySelectorAll('.removeAanpassingBtn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                removeAanpassingVeld(this);
+            });
+        });
+        
+        // Existing percentage inputs
+        document.querySelectorAll('.aanpassing-percentage').forEach(input => {
+            input.addEventListener('input', berekenEindwaarde);
+        });
+        
+        berekenEindwaarde();
+    }
+    
+    function addAanpassingVeld() {
+        if (!canEdit) return;
+        
+        const container = document.getElementById('aanpassingenContainer');
+        const newRow = document.createElement('div');
+        newRow.className = 'row mb-3 aanpassing-row';
+        newRow.innerHTML = `
+            <div class="col-md-8">
+                <label class="form-label">Aanpassing - Beschrijving</label>
+                <input type="text" class="form-control aanpassing-naam" name="aanpassing_naam[]"
+                    placeholder="Bijv. Onderhoudsstaat, Locatie bonus, etc.">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Percentage (%)</label>
+                <input type="number" step="0.01" class="form-control aanpassing-percentage" name="aanpassing_percentage[]"
+                    placeholder="0,0">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label">&nbsp;</label>
+                <button type="button" class="btn btn-sm btn-outline-danger d-block removeAanpassingBtn">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+        
+        container.appendChild(newRow);
+        
+        // Event listeners voor nieuwe elementen
+        const removeBtn = newRow.querySelector('.removeAanpassingBtn');
+        removeBtn.addEventListener('click', function() {
+            removeAanpassingVeld(this);
+        });
+        
+        const percentageInput = newRow.querySelector('.aanpassing-percentage');
+        percentageInput.addEventListener('input', berekenEindwaarde);
+        
+        updateEmptyMessage();
+        berekenEindwaarde();
+    }
+    
+    function removeAanpassingVeld(button) {
+        const row = button.closest('.aanpassing-row');
+        row.remove();
+        updateEmptyMessage();
+        berekenEindwaarde();
+    }
+    
+    function updateEmptyMessage() {
+        const aanpassingenRows = document.querySelectorAll('.aanpassing-row');
+        const emptyMessage = document.getElementById('emptyAanpassingenMessage');
+        
+        if (emptyMessage) {
+            if (aanpassingenRows.length === 0) {
+                emptyMessage.style.display = 'block';
+            } else {
+                emptyMessage.style.display = 'none';
+            }
+        }
+    }
+    
+    // ===== EINDWAARDE BEREKENING =====
+    function berekenEindwaarde() {
+        const subtotaal = parseFloat(document.querySelector('#subtotaal_waarde').value) || 0;
+        const percentageInputs = document.querySelectorAll('.aanpassing-percentage');
+        let totaalPercentage = 0;
+        
+        // Bereken totaal percentage van alle aanpassingen
+        percentageInputs.forEach(input => {
+            const value = parseFloat(input.value) || 0;
+            totaalPercentage += value;
+        });
+        
+        // Bereken aanpassingsbedrag
+        const aanpassingsBedrag = subtotaal * (totaalPercentage / 100);
+        
+        // Bereken eindwaarde
+        const eindwaarde = subtotaal + aanpassingsBedrag;
+        
+        // Update displays
+        const totaleAanpassingenElement = document.querySelector('#totaleAanpassingen');
+        const aanpassingsBedragElement = document.querySelector('#aanpassingsBedrag');
+        const eindwaardeDisplay = document.querySelector('#eindwaardeDisplay');
+        const waardeInput = document.querySelector('#waarde');
+        
+        if (totaleAanpassingenElement) {
+            totaleAanpassingenElement.textContent = formatPercentage(totaalPercentage);
+        }
+        if (aanpassingsBedragElement) {
+            aanpassingsBedragElement.textContent = formatEuro(aanpassingsBedrag);
+        }
+        if (eindwaardeDisplay) {
+            eindwaardeDisplay.textContent = '€' + formatEuro(eindwaarde);
+        }
+        if (waardeInput) {
+            waardeInput.value = eindwaarde.toFixed(2);
+        }
+    }
+    
+    // ===== EVENT LISTENERS =====
+    // Automatische berekening bij wijziging van invoervelden
+    const inputFields = ['#oppervlakte', '#hoogte_meters', '#prijs_per_m2', '#prijs_per_m3', '#subtotaal_waarde'];
+    inputFields.forEach(selector => {
+        const element = document.querySelector(selector);
+        if (element) {
+            element.addEventListener('input', function() {
+                if (selector === '#subtotaal_waarde') {
+                    berekenEindwaarde();
+                } else {
+                    berekenSubtotaalAutomatisch();
+                }
+                
+                // Voor woonfuncties: herbereken prijs per m³ als oppervlakte of hoogte wijzigt
+                if (!isEditMode && (selector === '#oppervlakte' || selector === '#hoogte_meters')) {
+                    const form = document.querySelector('#taxatieForm');
+                    const isWoonfunctie = form.getAttribute('data-woonfunctie') === 'true';
+                    if (isWoonfunctie) {
+                        // Check of we een WOZ waarde hebben in de sidebar
+                        const wozContent = document.getElementById('woz-comparison-content');
+                        if (wozContent && wozContent.innerHTML.includes('€')) {
+                            // Probeer WOZ waarde uit de content te halen
+                            const match = wozContent.innerHTML.match(/€\s*([\d,.]+)/);
+                            if (match) {
+                                const wozWaarde = parseFloat(match[1].replace(/[.,]/g, '').replace(/(\d{2})$/, '.$1'));
+                                if (wozWaarde > 0) {
+                                    // Herbereken alleen als het veld nog de oude waarde heeft
+                                    setTimeout(() => berekenPrijsPerM3VanuitWoz(wozWaarde), 100);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    });
+    
+    // ===== FORM VALIDATION =====
+    const taxatieForm = document.getElementById('taxatieForm');
+    if (taxatieForm) {
+        taxatieForm.addEventListener('submit', function(e) {
+            const waardeInput = this.querySelector('#waarde');
+            if (!waardeInput.value || parseFloat(waardeInput.value) === 0) {
+                e.preventDefault();
+                alert('Vul eerst alle benodigde velden in om een waarde te berekenen');
+                return false;
+            }
+        });
+    }
+    
+    // ===== WOZ FUNCTIONALITEIT (ALLEEN VOOR NIEUWE TAXATIES MET WOONFUNCTIE) =====
+    if (!isEditMode) {
+        const wozCard = document.getElementById('woz-comparison-card');
+        if (wozCard) {
+            // WOZ sidebar is al zichtbaar voor woonfuncties via template conditie
+            document.getElementById('woz-loading').style.display = '';
+            
+            const adres = wozCard.getAttribute('data-adres');
+            const postcode = wozCard.getAttribute('data-postcode');
+            const plaats = wozCard.getAttribute('data-plaats');
+            const gebruiksdoel = wozCard.getAttribute('data-gebruiksdoel');
+            const fullAddress = adres + ', ' + postcode + ' ' + plaats;
+            
+            fetch('/api/woz_lookup?address=' + encodeURIComponent(fullAddress))
+                .then(resp => resp.json())
+                .then(data => {
+                    document.getElementById('woz-loading').style.display = 'none';
+                    if (data.success) {
+                        var woz = data.data.woz_data;
+                        var values = data.data.woz_values;
+                        var html = '';
+                        
+                        const huidigeWozWaarde = values.length ? values[0].vastgestelde_waarde : 0;
+                        html += "<b>Huidige WOZ-waarde:</b> <span class='text-success'>€ " + (huidigeWozWaarde ? formatEuro(huidigeWozWaarde) : '-') + " </span><br/>";
+                        
+                        if (values.length > 1) {
+                            html += '<b>WOZ-waarde historie:</b><ul>';
+                            values.forEach(function(v) {
+                                html += "<li>" + v.peildatum + ": €" + formatEuro(v.vastgestelde_waarde) + "</li>";
+                            });
+                            html += '</ul>';
+                        }
+                        html += "<b>Kadastraal:</b> " + (woz.kadastrale_gemeente_code || '-') + " " + (woz.kadastrale_sectie || '') + " " + (woz.kadastraal_perceel_nummer || '') + "<br/>";
+                        html += "<b>Grondoppervlakte:</b> " + (woz.grondoppervlakte ? woz.grondoppervlakte + ' m²' : '-') + "<br/>";
+                        document.getElementById('woz-comparison-content').innerHTML = html;
+                        
+                        // AUTO-BEREKENING PRIJS PER M³ VOOR WOONFUNCTIES
+                        if (gebruiksdoel && gebruiksdoel.toLowerCase().includes('woonfunctie') && huidigeWozWaarde > 0) {
+                            berekenPrijsPerM3VanuitWoz(huidigeWozWaarde);
+                        }
+                    } else {
+                        document.getElementById('woz-comparison-content').innerHTML = '<span class="text-danger">Geen WOZ-data gevonden voor dit adres.</span>';
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('woz-loading').style.display = 'none';
+                    document.getElementById('woz-comparison-content').innerHTML = '<span class="text-danger">Fout bij ophalen WOZ-data.</span>';
+                });
+        }
+    }
+    
+    // ===== INITIALISATIE =====
+    initAanpassingenBeheer();
+    
+    // Initiële berekening
+    berekenSubtotaalAutomatisch();
+    
+    // Voor bewerk modus: trigger berekeningen met bestaande data
+    if (isEditMode) {
+        berekenEindwaarde();
+    }
+});
+</script>
+{% endblock %}

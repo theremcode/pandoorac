@@ -20,6 +20,23 @@ RUN apt-get update \
         curl \
         libmagic1 \
         libmagic-dev \
+        # WeasyPrint dependencies \
+        libpango-1.0-0 \
+        libharfbuzz0b \
+        libpangoft2-1.0-0 \
+        libgdk-pixbuf-2.0-0 \
+        libffi-dev \
+        shared-mime-info \
+        libcairo2 \
+        libglib2.0-0 \
+        libpangocairo-1.0-0 \
+        libxml2-dev \
+        libxslt1-dev \
+        libjpeg62-turbo-dev \
+        libopenjp2-7-dev \
+        libpng-dev \
+        libtiff5-dev \
+        libwebp-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
