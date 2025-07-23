@@ -6,6 +6,20 @@ type: Opaque
 data:
   secret-key: {{ .Values.app.secretKey | b64enc }}
 ---
+{{- if .Values.localStorage.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Release.Name }}-uploads
+spec:
+  accessModes:
+    - ReadWriteMany  # Required for Azure File Share
+  storageClassName: {{ .Values.localStorage.storageClass }}
+  resources:
+    requests:
+      storage: {{ .Values.localStorage.storageSize }}
+---
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -51,15 +65,10 @@ spec:
               key: postgres-password
         - name: REDIS_URL
           value: redis://{{ .Release.Name }}-redis:6379
-        - name: MINIO_ENDPOINT
-          value: {{ .Release.Name }}-minio:9000
-        - name: MINIO_ACCESS_KEY
-          value: {{ .Values.minio.accessKey }}
-        - name: MINIO_SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Release.Name }}-minio
-              key: minio-secret-key
+        - name: STORAGE_TYPE
+          value: "local"  # Use local storage mounted to Azure File Share
+        - name: UPLOAD_FOLDER
+          value: {{ .Values.localStorage.mountPath | default "/app/uploads" }}
         - name: SECRET_KEY
           valueFrom:
             secretKeyRef:
@@ -69,6 +78,17 @@ spec:
           value: https
         - name: SERVER_NAME
           value: {{ .Values.ingress.hostname }}
+        {{- if .Values.localStorage.enabled }}
+        volumeMounts:
+        - name: uploads-storage
+          mountPath: {{ .Values.localStorage.mountPath | default "/app/uploads" }}
+        {{- end }}
+      {{- if .Values.localStorage.enabled }}
+      volumes:
+      - name: uploads-storage
+        persistentVolumeClaim:
+          claimName: {{ .Release.Name }}-uploads
+      {{- end }}
 ---
 apiVersion: v1
 kind: Service

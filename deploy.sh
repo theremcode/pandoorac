@@ -153,14 +153,6 @@ deploy() {
             RANDOM_DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
         fi
         
-        if kubectl get secret "$RELEASE_NAME-minio-secret" -n "$NAMESPACE" >/dev/null 2>&1; then
-            log_info "Found existing MinIO secret, extracting password..."
-            RANDOM_MINIO_SECRET=$(kubectl get secret "$RELEASE_NAME-minio-secret" -n "$NAMESPACE" -o jsonpath='{.data.minio-secret-key}' | base64 -d)
-        else
-            log_info "No existing MinIO secret found, generating new one..."
-            RANDOM_MINIO_SECRET=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-        fi
-        
         if kubectl get secret "$RELEASE_NAME-app-secret" -n "$NAMESPACE" >/dev/null 2>&1; then
             log_info "Found existing app secret, extracting secret key..."
             RANDOM_SECRET_KEY=$(kubectl get secret "$RELEASE_NAME-app-secret" -n "$NAMESPACE" -o jsonpath='{.data.secret-key}' | base64 -d)
@@ -174,13 +166,11 @@ deploy() {
         log_info "Namespace $NAMESPACE does not exist, generating new secrets..."
         # Generate random secrets for production
         RANDOM_DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-        RANDOM_MINIO_SECRET=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
         RANDOM_SECRET_KEY=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
         log_info "Generated new secrets for production deployment"
     fi
     
     log_info "Database password: $RANDOM_DB_PASSWORD"
-    log_info "MinIO secret: $RANDOM_MINIO_SECRET"
     log_info "Flask secret key: $RANDOM_SECRET_KEY"
     
     # Check if release exists
@@ -189,7 +179,6 @@ deploy() {
         helm upgrade "$RELEASE_NAME" "$CHART_PATH" \
             --namespace "$NAMESPACE" \
             --set postgresql.password="$RANDOM_DB_PASSWORD" \
-            --set minio.secretKey="$RANDOM_MINIO_SECRET" \
             --set app.secretKey="$RANDOM_SECRET_KEY" \
             --wait \
             --timeout=10m
@@ -199,7 +188,6 @@ deploy() {
             --create-namespace \
             --namespace "$NAMESPACE" \
             --set postgresql.password="$RANDOM_DB_PASSWORD" \
-            --set minio.secretKey="$RANDOM_MINIO_SECRET" \
             --set app.secretKey="$RANDOM_SECRET_KEY" \
             --wait \
             --timeout=10m

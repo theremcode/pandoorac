@@ -3332,6 +3332,11 @@ def genereer_taxatie_rapport_ajax(dossier_id, taxatie_id):
                 def seekable(self):
                     return True
                 
+                def save(self, filepath):
+                    """Save PDF data to file path"""
+                    with open(filepath, 'wb') as f:
+                        f.write(self.data)
+                
                 def close(self):
                     if hasattr(self, '_buffer') and self._buffer:
                         self._buffer.close()
