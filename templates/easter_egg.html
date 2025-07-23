@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}🎉 Easter Egg!{% endblock %}
+
+{% block content %}
+<div class="container-fluid vh-100 d-flex align-items-center justify-content-center" style="background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #feca57);">
+    <div class="text-center">
+        <div class="card shadow-lg border-0" style="border-radius: 20px; background: rgba(255, 255, 255, 0.95);">
+            <div class="card-body p-5">
+                <h1 class="display-4 mb-4" style="color: #333;">🎉 Gefeliciteerd! 🎉</h1>
+                <p class="lead mb-4">Nice, je hebt de geheime Easter egg gevonden!</p>
+                
+                <!-- Animated GIF Container -->
+                <div id="gif-container" class="mb-4">
+                    <div id="gif-placeholder" class="border rounded p-5 mb-3" style="min-height: 300px; background: #f8f9fa; display: flex; align-items: center; justify-content: center;">
+                        <div class="text-center">
+                            <i class="fas fa-play-circle fa-5x text-primary mb-3"></i>
+                            <h4>Wat wil je doen met Karensa?!?!</h4>
+                        </div>
+                    </div>
+                    
+                    <!-- Hidden GIF that will be shown when button is clicked -->
+                    <img id="easter-gif" src="#" alt="Easter Egg Animation" class="img-fluid rounded shadow" style="display: none; max-width: 100%; height: auto;">
+                </div>
+                
+                <!-- Play Button -->
+                <button id="play-gif-btn" class="btn btn-primary btn-lg mb-3 pulse-animation">
+                    <i class="fas fa-play me-2"></i>
+                    Kaaarensaaah BOEM! ✨
+                </button>
+                
+                <!-- Stop Button (hidden initially) -->
+                <button id="stop-gif-btn" class="btn btn-danger btn-lg mb-3 me-2" style="display: none;">
+                    <i class="fas fa-stop me-2"></i>
+                    Stop Animatie
+                </button>
+                
+                <!-- Reset Button (hidden initially) -->
+                <button id="reset-gif-btn" class="btn btn-secondary btn-lg mb-3" style="display: none;">
+                    <i class="fas fa-redo me-2"></i>
+                    Reset
+                </button>
+                
+                <div class="mt-4">
+                    <p class="text-muted">
+                        <small>
+                            Is dat ff een opluchting...
+                        </small>
+                    </p>
+                </div>
+                
+                <div class="mt-3">
+                    <a href="{{ url_for('dossiers') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-home me-2"></i>
+                        Terug naar Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- File upload modal for adding your own GIF -->
+<div class="modal fade" id="uploadGifModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Upload je eigen GIF</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="gif-upload-form" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="gif-file" class="form-label">Kies een GIF bestand:</label>
+                        <input type="file" class="form-control" id="gif-file" name="gif_file" accept=".gif">
+                    </div>
+                    <div class="mb-3">
+                        <small class="text-muted">Max bestandsgrootte: 5MB</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuleren</button>
+                <button type="button" class="btn btn-primary" id="upload-gif-btn">Upload</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.pulse-animation {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7);
+    }
+    70% {
+        transform: scale(1.05);
+        box-shadow: 0 0 0 10px rgba(0, 123, 255, 0);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 0 rgba(0, 123, 255, 0);
+    }
+}
+
+.card {
+    backdrop-filter: blur(10px);
+}
+
+/* Fancy background animation */
+body {
+    background: linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab);
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+}
+
+@keyframes gradientBG {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* Floating particles effect */
+.floating-particle {
+    position: absolute;
+    opacity: 0.7;
+    animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-20px);
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const playBtn = document.getElementById('play-gif-btn');
+    const stopBtn = document.getElementById('stop-gif-btn');
+    const resetBtn = document.getElementById('reset-gif-btn');
+    const gifContainer = document.getElementById('easter-gif');
+    const gifPlaceholder = document.getElementById('gif-placeholder');
+    
+    // Add some floating particles for extra magic
+    createFloatingParticles();
+    
+    // Default GIF URL - you can change this to your animated GIF
+    const defaultGifUrl = '/static/easter-egg.gif'; // You'll need to add your GIF here
+    
+    playBtn.addEventListener('click', function() {
+        // Hide placeholder and button
+        gifPlaceholder.style.display = 'none';
+        playBtn.style.display = 'none';
+        
+        // Show GIF and control buttons
+        gifContainer.src = defaultGifUrl;
+        gifContainer.style.display = 'block';
+        stopBtn.style.display = 'inline-block';
+        resetBtn.style.display = 'inline-block';
+        
+        // Add some celebration effects
+        createConfetti();
+        
+        // Play sound effect if available
+        playSound();
+    });
+    
+    stopBtn.addEventListener('click', function() {
+        // Pause the GIF by replacing with a static image
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = gifContainer.naturalWidth;
+        canvas.height = gifContainer.naturalHeight;
+        ctx.drawImage(gifContainer, 0, 0);
+        gifContainer.src = canvas.toDataURL();
+    });
+    
+    resetBtn.addEventListener('click', function() {
+        // Reset to initial state
+        gifContainer.style.display = 'none';
+        stopBtn.style.display = 'none';
+        resetBtn.style.display = 'none';
+        gifPlaceholder.style.display = 'flex';
+        playBtn.style.display = 'inline-block';
+    });
+    
+    // Secret karensa code listener
+    let karensaCode = [38, 38, 40, 40, 37, 39, 37, 39, 66, 65]; // Up Up Down Down Left Right Left Right B A
+    let userInput = [];
+    
+    document.addEventListener('keydown', function(e) {
+        userInput.push(e.keyCode);
+        
+        if (userInput.length > karensaCode.length) {
+            userInput.shift();
+        }
+        
+        if (JSON.stringify(userInput) === JSON.stringify(karensaCode)) {
+            activateSecretMode();
+        }
+    });
+    
+    function createFloatingParticles() {
+        const particles = ['🎉', '✨', '🌟', '💫', '🎊'];
+        
+        for (let i = 0; i < 10; i++) {
+            setTimeout(() => {
+                const particle = document.createElement('div');
+                particle.innerHTML = particles[Math.floor(Math.random() * particles.length)];
+                particle.className = 'floating-particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.top = Math.random() * 100 + '%';
+                particle.style.fontSize = (Math.random() * 20 + 10) + 'px';
+                particle.style.animationDelay = Math.random() * 6 + 's';
+                
+                document.body.appendChild(particle);
+                
+                // Remove after animation
+                setTimeout(() => {
+                    if (particle.parentNode) {
+                        particle.parentNode.removeChild(particle);
+                    }
+                }, 6000);
+            }, i * 200);
+        }
+    }
+    
+    function createConfetti() {
+        // Create confetti effect
+        const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#feca57'];
+        
+        for (let i = 0; i < 50; i++) {
+            setTimeout(() => {
+                const confetti = document.createElement('div');
+                confetti.style.position = 'fixed';
+                confetti.style.left = Math.random() * 100 + '%';
+                confetti.style.top = '-10px';
+                confetti.style.width = '10px';
+                confetti.style.height = '10px';
+                confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                confetti.style.transform = 'rotate(' + Math.random() * 360 + 'deg)';
+                confetti.style.animation = 'confetti-fall 3s linear forwards';
+                confetti.style.zIndex = '9999';
+                
+                document.body.appendChild(confetti);
+                
+                setTimeout(() => {
+                    if (confetti.parentNode) {
+                        confetti.parentNode.removeChild(confetti);
+                    }
+                }, 3000);
+            }, i * 50);
+        }
+    }
+    
+    function playSound() {
+        // Create a simple beep sound using Web Audio API
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 800;
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+            
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+        } catch (e) {
+            console.log('Could not play sound:', e);
+        }
+    }
+    
+    function activateSecretMode() {
+        alert('🎮 karensa Code Activated! Secret mode unlocked! 🎮');
+        document.body.style.filter = 'hue-rotate(180deg)';
+        
+        // Show upload modal
+        const uploadModal = new bootstrap.Modal(document.getElementById('uploadGifModal'));
+        uploadModal.show();
+    }
+});
+
+// Add confetti falling animation
+const style = document.createElement('style');
+style.textContent = `
+@keyframes confetti-fall {
+    to {
+        transform: translateY(100vh) rotate(720deg);
+    }
+}
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}

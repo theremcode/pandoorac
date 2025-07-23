@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Simple deployment script for Pandoorac on Azure AKS
+# Enhanced deployment script for Pandoorac on Azure AKS with interactive menu
 set -e
 
 # Colors for output
@@ -8,6 +8,8 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+PURPLE='\033[0;35m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Configuration
@@ -33,6 +35,14 @@ log_warning() {
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+log_menu() {
+    echo -e "${PURPLE}$1${NC}"
+}
+
+log_step() {
+    echo -e "${CYAN}[STEP]${NC} $1"
 }
 
 # Check prerequisites
@@ -136,7 +146,121 @@ build_and_push_image() {
     log_success "Helm values updated"
 }
 
-# Deploy function
+# Interactive menu functions
+show_main_menu() {
+    clear
+    echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║                   🚀 PANDOORAC DEPLOYMENT MENU               ║${NC}"
+    echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo
+    echo -e "${CYAN}Choose an action:${NC}"
+    echo
+    echo -e "${GREEN} 1)${NC} 🔄 Quick Update (Build + Push + Deploy)"
+    echo -e "${GREEN} 2)${NC} 🚀 Full Deploy (With secrets setup)"
+    echo -e "${GREEN} 3)${NC} 📦 Build & Push Image Only"
+    echo -e "${GREEN} 4)${NC} 🔄 Deploy Without Building"
+    echo -e "${GREEN} 5)${NC} 📊 Check Deployment Status"
+    echo -e "${GREEN} 6)${NC} 🧹 Cleanup Deployment"
+    echo -e "${GREEN} 7)${NC} 💾 Backup & Restore Options"
+    echo -e "${GREEN} 8)${NC} ⚙️  Configuration Options"
+    echo -e "${GREEN} 9)${NC} ❓ Help & Information"
+    echo -e "${RED}10)${NC} 🚪 Exit"
+    echo
+    echo -ne "${YELLOW}Enter your choice [1-10]: ${NC}"
+}
+
+show_backup_menu() {
+    clear
+    echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║                    💾 BACKUP & RESTORE MENU                  ║${NC}"
+    echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo
+    echo -e "${CYAN}Choose a backup action:${NC}"
+    echo
+    echo -e "${GREEN}1)${NC} 📥 Create Manual Backup"
+    echo -e "${GREEN}2)${NC} 📋 List Available Backups"
+    echo -e "${GREEN}3)${NC} 📤 Download Backup File"
+    echo -e "${GREEN}4)${NC} 🔙 Return to Main Menu"
+    echo
+    echo -ne "${YELLOW}Enter your choice [1-4]: ${NC}"
+}
+
+show_config_menu() {
+    clear
+    echo -e "${PURPLE}╔══════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${PURPLE}║                   ⚙️  CONFIGURATION MENU                     ║${NC}"
+    echo -e "${PURPLE}╚══════════════════════════════════════════════════════════════╝${NC}"
+    echo
+    echo -e "${CYAN}Current Configuration:${NC}"
+    echo -e "  ${BLUE}Registry:${NC} $ACR_REGISTRY"
+    echo -e "  ${BLUE}Image:${NC} $IMAGE_NAME:$IMAGE_TAG"
+    echo -e "  ${BLUE}Release:${NC} $RELEASE_NAME"
+    echo -e "  ${BLUE}Namespace:${NC} $NAMESPACE"
+    echo
+    echo -e "${CYAN}Configuration options:${NC}"
+    echo
+    echo -e "${GREEN}1)${NC} 🏷️  Change Image Tag"
+    echo -e "${GREEN}2)${NC} 📛 Change Release Name"
+    echo -e "${GREEN}3)${NC} 🏢 Change Namespace"
+    echo -e "${GREEN}4)${NC} 🔙 Return to Main Menu"
+    echo
+    echo -ne "${YELLOW}Enter your choice [1-4]: ${NC}"
+}
+
+# Quick update function (most common use case)
+quick_update() {
+    log_step "Starting Quick Update..."
+    log_info "This will build, push, and deploy the latest changes without touching secrets"
+    echo
+    read -p "$(echo -e ${YELLOW}"Continue? (y/N): "${NC})" -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        log_info "Quick update cancelled"
+        return
+    fi
+    
+    log_step "Step 1/3: Building and pushing image..."
+    build_and_push_image
+    
+    log_step "Step 2/3: Deploying to AKS..."
+    deploy_no_build
+    
+    log_step "Step 3/3: Checking deployment status..."
+    sleep 5
+    check_status
+    
+    log_success "Quick update completed! 🎉"
+    echo
+    read -p "$(echo -e ${CYAN}"Press Enter to return to menu..."${NC})"
+}
+
+# Update deployment without secrets reset
+deploy_no_build() {
+    log_info "Deploying to AKS without building image..."
+    
+    # Check if namespace exists
+    if ! kubectl get namespace "$NAMESPACE" &> /dev/null; then
+        log_info "Creating namespace: $NAMESPACE"
+        kubectl create namespace "$NAMESPACE"
+    fi
+    
+    # Check if release exists
+    if helm list -n "$NAMESPACE" | grep -q "$RELEASE_NAME"; then
+        log_info "Upgrading existing release: $RELEASE_NAME"
+        helm upgrade "$RELEASE_NAME" "$CHART_PATH" \
+            --namespace "$NAMESPACE" \
+            --timeout 10m \
+            --wait \
+            --reuse-values
+    else
+        log_warning "Release $RELEASE_NAME does not exist. Use full deploy to create it."
+        return 1
+    fi
+    
+    log_success "Deployment completed"
+}
+
+# Enhanced deploy function
 deploy() {
     log_info "Deploying Pandoorac to Azure AKS..."
     
@@ -431,62 +555,295 @@ cleanup() {
 
 # Main script
 main() {
-    echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${BLUE}║                    Pandoorac Deployment Script               ║${NC}"
-    echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
-    echo
+    # If arguments provided, use command line mode
+    if [ $# -gt 0 ]; then
+        echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+        echo -e "${BLUE}║                    Pandoorac Deployment Script               ║${NC}"
+        echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+        echo
+        
+        check_prerequisites
+        show_cluster_info
+        
+        case "${1}" in
+            "deploy")
+                build_and_push_image
+                deploy
+                check_status
+                ;;
+            "deploy-no-build")
+                deploy_no_build
+                check_status
+                ;;
+            "quick-update")
+                quick_update
+                ;;
+            "build")
+                build_and_push_image
+                ;;
+            "status")
+                check_status
+                ;;
+            "cleanup")
+                cleanup
+                ;;
+            "backup")
+                create_backup
+                ;;
+            "list-backups")
+                list_backups
+                ;;
+            "download-backup")
+                download_backup "$2"
+                ;;
+            "help"|"-h"|"--help")
+                echo "Usage: $0 [command]"
+                echo
+                echo "Commands:"
+                echo "  deploy           - Build, push to ACR, and deploy (full setup)"
+                echo "  deploy-no-build  - Deploy without building/pushing image"
+                echo "  quick-update     - Build, push, and deploy (preserves secrets)"
+                echo "  build            - Build and push image to ACR only"
+                echo "  status           - Check deployment status"
+                echo "  cleanup          - Remove the deployment"
+                echo "  backup           - Create manual PostgreSQL backup"
+                echo "  list-backups     - List available backups"
+                echo "  download-backup  - Download a backup file (requires filename)"
+                echo "  help             - Show this help message"
+                echo
+                echo "Run without arguments for interactive menu"
+                ;;
+            *)
+                log_error "Unknown command: $1"
+                echo "Use '$0 help' for usage information"
+                exit 1
+                ;;
+        esac
+        return
+    fi
     
+    # Interactive menu mode
     check_prerequisites
-    show_cluster_info
     
-    case "${1:-deploy}" in
-        "deploy")
-            build_and_push_image
-            deploy
-            check_status
-            ;;
-        "deploy-no-build")
-            deploy
-            check_status
-            ;;
-        "build")
-            build_and_push_image
-            ;;
-        "status")
-            check_status
-            ;;
-        "cleanup")
-            cleanup
-            ;;
-        "backup")
-            create_backup
-            ;;
-        "list-backups")
-            list_backups
-            ;;
-        "download-backup")
-            download_backup "$2"
-            ;;
-        "help"|"-h"|"--help")
-            echo "Usage: $0 [deploy|deploy-no-build|build|status|cleanup|backup|list-backups|download-backup|help]"
-            echo
-            echo "Commands:"
-            echo "  deploy           - Build, push to ACR, and deploy (default)"
-            echo "  deploy-no-build  - Deploy without building/pushing image"
-            echo "  build            - Build and push image to ACR only"
-            echo "  status           - Check deployment status"
-            echo "  cleanup          - Remove the deployment"
-            echo "  backup           - Create manual PostgreSQL backup"
-            echo "  list-backups     - List available backups"
-            echo "  download-backup  - Download a backup file (requires filename)"
-            echo "  help             - Show this help message"
-            ;;
-        *)
-            log_error "Unknown command: $1"
-            echo "Use '$0 help' for usage information"
-            exit 1
-            ;;
-    esac
+    while true; do
+        show_main_menu
+        read -r choice
+        
+        case $choice in
+            1)
+                quick_update
+                ;;
+            2)
+                clear
+                echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+                echo -e "${BLUE}║                      🚀 FULL DEPLOYMENT                      ║${NC}"
+                echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+                echo
+                show_cluster_info
+                log_step "Step 1/3: Building and pushing image..."
+                build_and_push_image
+                log_step "Step 2/3: Deploying to AKS..."
+                deploy
+                log_step "Step 3/3: Checking deployment status..."
+                check_status
+                log_success "Full deployment completed! 🎉"
+                echo
+                read -p "$(echo -e ${CYAN}"Press Enter to return to menu..."${NC})"
+                ;;
+            3)
+                clear
+                echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+                echo -e "${BLUE}║                   📦 BUILD & PUSH IMAGE                      ║${NC}"
+                echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+                echo
+                show_cluster_info
+                build_and_push_image
+                log_success "Build and push completed! 🎉"
+                echo
+                read -p "$(echo -e ${CYAN}"Press Enter to return to menu..."${NC})"
+                ;;
+            4)
+                clear
+                echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+                echo -e "${BLUE}║                🔄 DEPLOY WITHOUT BUILDING                    ║${NC}"
+                echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+                echo
+                show_cluster_info
+                deploy_no_build
+                check_status
+                log_success "Deployment completed! 🎉"
+                echo
+                read -p "$(echo -e ${CYAN}"Press Enter to return to menu..."${NC})"
+                ;;
+            5)
+                clear
+                echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+                echo -e "${BLUE}║                   📊 DEPLOYMENT STATUS                       ║${NC}"
+                echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+                echo
+                show_cluster_info
+                check_status
+                echo
+                read -p "$(echo -e ${CYAN}"Press Enter to return to menu..."${NC})"
+                ;;
+            6)
+                clear
+                echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+                echo -e "${BLUE}║                    🧹 CLEANUP DEPLOYMENT                     ║${NC}"
+                echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+                echo
+                show_cluster_info
+                cleanup
+                echo
+                read -p "$(echo -e ${CYAN}"Press Enter to return to menu..."${NC})"
+                ;;
+            7)
+                # Backup submenu
+                while true; do
+                    show_backup_menu
+                    read -r backup_choice
+                    
+                    case $backup_choice in
+                        1)
+                            clear
+                            echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+                            echo -e "${BLUE}║                   📥 CREATE MANUAL BACKUP                    ║${NC}"
+                            echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+                            echo
+                            create_backup
+                            echo
+                            read -p "$(echo -e ${CYAN}"Press Enter to continue..."${NC})"
+                            ;;
+                        2)
+                            clear
+                            echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+                            echo -e "${BLUE}║                   📋 AVAILABLE BACKUPS                       ║${NC}"
+                            echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+                            echo
+                            list_backups
+                            echo
+                            read -p "$(echo -e ${CYAN}"Press Enter to continue..."${NC})"
+                            ;;
+                        3)
+                            clear
+                            echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+                            echo -e "${BLUE}║                   📤 DOWNLOAD BACKUP                         ║${NC}"
+                            echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+                            echo
+                            echo -ne "${YELLOW}Enter backup filename: ${NC}"
+                            read -r backup_file
+                            if [ -n "$backup_file" ]; then
+                                download_backup "$backup_file"
+                            else
+                                log_warning "No filename provided"
+                            fi
+                            echo
+                            read -p "$(echo -e ${CYAN}"Press Enter to continue..."${NC})"
+                            ;;
+                        4)
+                            break
+                            ;;
+                        *)
+                            log_error "Invalid choice. Please select 1-4."
+                            sleep 2
+                            ;;
+                    esac
+                done
+                ;;
+            8)
+                # Configuration submenu
+                while true; do
+                    show_config_menu
+                    read -r config_choice
+                    
+                    case $config_choice in
+                        1)
+                            echo
+                            echo -ne "${YELLOW}Enter new image tag (current: $IMAGE_TAG): ${NC}"
+                            read -r new_tag
+                            if [ -n "$new_tag" ]; then
+                                IMAGE_TAG="$new_tag"
+                                log_success "Image tag updated to: $IMAGE_TAG"
+                            fi
+                            sleep 2
+                            ;;
+                        2)
+                            echo
+                            echo -ne "${YELLOW}Enter new release name (current: $RELEASE_NAME): ${NC}"
+                            read -r new_release
+                            if [ -n "$new_release" ]; then
+                                RELEASE_NAME="$new_release"
+                                log_success "Release name updated to: $RELEASE_NAME"
+                            fi
+                            sleep 2
+                            ;;
+                        3)
+                            echo
+                            echo -ne "${YELLOW}Enter new namespace (current: $NAMESPACE): ${NC}"
+                            read -r new_namespace
+                            if [ -n "$new_namespace" ]; then
+                                NAMESPACE="$new_namespace"
+                                log_success "Namespace updated to: $NAMESPACE"
+                            fi
+                            sleep 2
+                            ;;
+                        4)
+                            break
+                            ;;
+                        *)
+                            log_error "Invalid choice. Please select 1-4."
+                            sleep 2
+                            ;;
+                    esac
+                done
+                ;;
+            9)
+                clear
+                echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
+                echo -e "${BLUE}║                   ❓ HELP & INFORMATION                       ║${NC}"
+                echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
+                echo
+                echo -e "${CYAN}Pandoorac Deployment Script Help${NC}"
+                echo
+                echo -e "${GREEN}Quick Update (Option 1):${NC}"
+                echo "  - Most common option for code updates"
+                echo "  - Builds new image, pushes to ACR, and deploys"
+                echo "  - Preserves existing secrets and configuration"
+                echo "  - Fastest way to deploy your latest changes"
+                echo
+                echo -e "${GREEN}Full Deploy (Option 2):${NC}"
+                echo "  - Complete deployment setup"
+                echo "  - Use this for first-time deployment"
+                echo "  - Sets up all secrets and configurations"
+                echo
+                echo -e "${GREEN}Build & Push Only (Option 3):${NC}"
+                echo "  - Only builds and pushes container image"
+                echo "  - Useful for CI/CD pipelines"
+                echo "  - No deployment to AKS"
+                echo
+                echo -e "${GREEN}Deploy Without Building (Option 4):${NC}"
+                echo "  - Deploys using existing image in ACR"
+                echo "  - Updates existing deployment"
+                echo "  - Preserves secrets and configuration"
+                echo
+                echo -e "${GREEN}Command Line Usage:${NC}"
+                echo "  ./deploy.sh quick-update    # Quick update with latest changes"
+                echo "  ./deploy.sh deploy          # Full deployment"
+                echo "  ./deploy.sh build           # Build and push only"
+                echo "  ./deploy.sh status          # Check status"
+                echo
+                read -p "$(echo -e ${CYAN}"Press Enter to return to menu..."${NC})"
+                ;;
+            10)
+                log_info "Goodbye! 👋"
+                exit 0
+                ;;
+            *)
+                log_error "Invalid choice. Please select 1-10."
+                sleep 2
+                ;;
+        esac
+    done
 }
 
 # Run main function

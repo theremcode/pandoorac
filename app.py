@@ -3531,5 +3531,14 @@ def download_taxatie_rapport(dossier_id, taxatie_id):
         flash('Er is een fout opgetreden bij het downloaden van het rapport', 'danger')
         return redirect(url_for('dossier_detail', dossier_id=dossier_id))
 
+# Easter egg route
+@app.route('/karensa')
+@login_required
+def easter_egg():
+    """
+    Easter egg page - access with a special button or karensa code!
+    """
+    return render_template('easter_egg.html')
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True) 
