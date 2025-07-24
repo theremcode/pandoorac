@@ -2203,6 +2203,8 @@ def woz_lookup_and_save():
         # Check if WOZ data already exists for this dossier
         existing_woz = WozData.query.filter_by(dossier_id=dossier_id).first()
         
+        # NOTE: WOZ service currently uses mock data for development/testing
+        # Real WOZ API integration is not yet implemented
         woz_service = WozService()
         woz_response = woz_service.lookup_woz_data(address)
         
