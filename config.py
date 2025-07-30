@@ -36,6 +36,20 @@ class Config:
     SQLALCHEMY_DATABASE_URI = get_database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
+    # Enhanced PostgreSQL configuration for AKS reliability
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,          # Verify connections before use
+        'pool_recycle': 300,            # Recycle connections every 5 minutes
+        'pool_timeout': 20,             # Timeout for getting connection from pool
+        'max_overflow': 0,              # Don't allow overflow connections
+        'echo': False,                  # Set to True for SQL debugging
+        'isolation_level': 'READ_COMMITTED',  # Consistent isolation level
+        'connect_args': {
+            'options': '-c timezone=UTC',  # Set timezone for consistency
+            'application_name': 'pandoorac'  # Identify the application in logs
+        }
+    }
+    
     # File storage settings - Local storage as default (mounted to Azure File Share in production)
     STORAGE_TYPE = os.environ.get('STORAGE_TYPE', 'local')
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')

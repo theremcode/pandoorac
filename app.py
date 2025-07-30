@@ -122,15 +122,16 @@ class Dossier(db.Model):
     modified_at = db.Column(db.DateTime, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     last_editor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    taxaties = db.relationship('Taxatie', backref='dossier', lazy=True)
-    documents = db.relationship('Document', backref='dossier', lazy=True)
+    # Updated relationships with cascade delete for better reliability in AKS/PostgreSQL
+    taxaties = db.relationship('Taxatie', backref='dossier', lazy=True, cascade='all, delete-orphan')
+    documents = db.relationship('Document', backref='dossier', lazy=True, cascade='all, delete-orphan')
+    woz_data = db.relationship('WozData', lazy=True, cascade='all, delete-orphan')
+    bag_data = db.relationship('BagData', lazy=True, cascade='all, delete-orphan')
+    walkscore_data = db.relationship('WalkScoreData', lazy=True, cascade='all, delete-orphan')
+    pdok_data = db.relationship('PDOKData', lazy=True, cascade='all, delete-orphan')
     # Creator and last editor relationships with explicit foreign keys
     creator = db.relationship('User', foreign_keys=[user_id], backref=db.backref('created_dossiers', overlaps="dossiers,user"), post_update=True, overlaps="dossiers,user")
     last_editor = db.relationship('User', foreign_keys=[last_editor_id], backref='edited_dossiers', post_update=True)
-    woz_data = db.relationship('WozData', lazy=True)
-    bag_data = db.relationship('BagData', lazy=True)
-    walkscore_data = db.relationship('WalkScoreData', lazy=True)
-    pdok_data = db.relationship('PDOKData', lazy=True)
     
     def update_modification_tracking(self, editor_id):
         """Update modification tracking when dossier is edited"""
@@ -161,8 +162,9 @@ class Taxatie(db.Model):
     # New field for unlimited dynamic adjustments (JSON)
     aanpassingen = db.Column(db.Text, nullable=True)  # JSON string storing dynamic adjustments
     dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id'), nullable=False)
-    photos = db.relationship('Photo', backref='taxatie', lazy=True)
-    status_history = db.relationship('TaxatieStatusHistory', backref='taxatie', lazy=True, order_by='TaxatieStatusHistory.timestamp.desc()')
+    # Updated relationships with cascade delete for better reliability in AKS/PostgreSQL
+    photos = db.relationship('Photo', backref='taxatie', lazy=True, cascade='all, delete-orphan')
+    status_history = db.relationship('TaxatieStatusHistory', backref='taxatie', lazy=True, order_by='TaxatieStatusHistory.timestamp.desc()', cascade='all, delete-orphan')
     
     def can_edit(self):
         """Check if the taxatie can be edited based on its status"""
@@ -273,7 +275,7 @@ class Taxatie(db.Model):
 
 class TaxatieStatusHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    taxatie_id = db.Column(db.Integer, db.ForeignKey('taxatie.id'), nullable=False)
+    taxatie_id = db.Column(db.Integer, db.ForeignKey('taxatie.id', ondelete='CASCADE'), nullable=False)
     old_status = db.Column(db.String(20), nullable=False)
     new_status = db.Column(db.String(20), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -286,14 +288,14 @@ class Document(db.Model):
     original_filename = db.Column(db.String(255), nullable=False)
     file_type = db.Column(db.String(100), nullable=False)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id'), nullable=False)
+    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id', ondelete='CASCADE'), nullable=False)
 
 class Photo(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     filename = db.Column(db.String(255), nullable=False)
     original_filename = db.Column(db.String(255), nullable=False)
     uploaded_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    taxatie_id = db.Column(db.Integer, db.ForeignKey('taxatie.id'), nullable=False)
+    taxatie_id = db.Column(db.Integer, db.ForeignKey('taxatie.id', ondelete='CASCADE'), nullable=False)
 
 class UserLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -350,13 +352,13 @@ class WozData(db.Model):
     api_response_data = db.Column(db.Text, nullable=True)  # Store full JSON response
     
     # Relationships
-    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id'), nullable=True)
+    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id', ondelete='CASCADE'), nullable=True)
     # WOZ Values history (one-to-many relationship)
     woz_values = db.relationship('WozValue', backref='woz_data', lazy=True, cascade='all, delete-orphan')
 
 class WozValue(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    woz_data_id = db.Column(db.Integer, db.ForeignKey('woz_data.id'), nullable=False)
+    woz_data_id = db.Column(db.Integer, db.ForeignKey('woz_data.id', ondelete='CASCADE'), nullable=False)
     peildatum = db.Column(db.Date, nullable=False)
     vastgestelde_waarde = db.Column(db.Integer, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
@@ -398,7 +400,7 @@ class BagData(db.Model):
     api_response_data = db.Column(db.Text, nullable=True)  # Store full JSON response
     
     # Relationships
-    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id'), nullable=True)
+    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id', ondelete='CASCADE'), nullable=True)
 
 class WalkScoreData(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -430,7 +432,7 @@ class WalkScoreData(db.Model):
     api_response_data = db.Column(db.Text, nullable=True)  # Store full JSON response
     
     # Relationships
-    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id'), nullable=True)
+    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id', ondelete='CASCADE'), nullable=True)
 
 class PDOKData(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -487,7 +489,7 @@ class PDOKData(db.Model):
     api_response_data = db.Column(db.Text, nullable=True)  # Store full JSON response
     
     # Relationships
-    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id'), nullable=True)
+    dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id', ondelete='CASCADE'), nullable=True)
 
 def get_setting(key, default=None):
     setting = Setting.query.filter_by(key=key).first()
@@ -2954,31 +2956,75 @@ def verwijder_dossier(dossier_id):
     """Delete a dossier if it has no taxaties"""
     dossier = Dossier.query.get_or_404(dossier_id)
     
+    # Enhanced logging for debugging
+    app.logger.info(f"Attempting to delete dossier {dossier_id} by user {current_user.id}")
+    
     # Check if dossier has taxaties
     if dossier.taxaties:
+        app.logger.warning(f"Cannot delete dossier {dossier_id}: has {len(dossier.taxaties)} taxaties")
         flash('Dossier kan niet worden verwijderd omdat er nog taxaties aan gekoppeld zijn', 'error')
         return redirect(url_for('dossier_detail', dossier_id=dossier_id))
     
+    # Start explicit transaction
     try:
-        # Delete related documents
+        app.logger.info(f"Starting deletion of dossier {dossier_id}")
+        
+        # Delete related files first (outside transaction)
+        files_to_delete = []
         for document in dossier.documents:
-            try:
-                storage.delete_file(document.filename)
-            except Exception as e:
-                print(f"Error deleting document file: {e}")
+            files_to_delete.append(document.filename)
         
-        # Delete WOZ data
+        # Delete related data step by step with explicit commits
+        app.logger.info(f"Deleting {len(dossier.documents)} documents from database")
+        for document in dossier.documents:
+            db.session.delete(document)
+        db.session.flush()  # Flush changes without committing
+        
+        app.logger.info(f"Deleting {len(dossier.woz_data)} WOZ data records")
         for woz_data in dossier.woz_data:
+            # Delete related WOZ values first
+            WozValue.query.filter_by(woz_data_id=woz_data.id).delete()
             db.session.delete(woz_data)
+        db.session.flush()
         
-        # Delete the dossier
+        app.logger.info(f"Deleting {len(dossier.bag_data)} BAG data records")
+        for bag_data in dossier.bag_data:
+            db.session.delete(bag_data)
+        db.session.flush()
+        
+        app.logger.info(f"Deleting {len(dossier.walkscore_data)} WalkScore data records")
+        for walkscore_data in dossier.walkscore_data:
+            db.session.delete(walkscore_data)
+        db.session.flush()
+        
+        app.logger.info(f"Deleting {len(dossier.pdok_data)} PDOK data records")
+        for pdok_data in dossier.pdok_data:
+            db.session.delete(pdok_data)
+        db.session.flush()
+        
+        # Delete the dossier itself
+        app.logger.info(f"Deleting dossier {dossier_id}")
         db.session.delete(dossier)
+        
+        # Commit all changes at once
         db.session.commit()
+        app.logger.info(f"Successfully committed deletion of dossier {dossier_id}")
+        
+        # Now delete files from storage (after successful database commit)
+        for filename in files_to_delete:
+            try:
+                storage.delete_file(filename)
+                app.logger.info(f"Deleted file: {filename}")
+            except Exception as e:
+                app.logger.error(f"Error deleting file {filename}: {e}")
         
         flash('Dossier succesvol verwijderd', 'success')
         return redirect(url_for('dossiers'))
         
     except Exception as e:
+        app.logger.error(f"Error deleting dossier {dossier_id}: {str(e)}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
         db.session.rollback()
         flash('Fout bij verwijderen dossier', 'error')
         return redirect(url_for('dossier_detail', dossier_id=dossier_id))
@@ -2994,34 +3040,61 @@ def verwijder_taxatie(dossier_id, taxatie_id):
         flash('Taxatie hoort niet bij dit dossier', 'error')
         return redirect(url_for('dossiers'))
     
+    # Enhanced logging for debugging
+    app.logger.info(f"Attempting to delete taxatie {taxatie_id} from dossier {dossier_id} by user {current_user.id}")
+    
     # Alleen huidige status controleren
     if taxatie.status == 'definitief':
+        app.logger.warning(f"Cannot delete taxatie {taxatie_id}: status is definitief")
         flash('Definitieve taxaties kunnen niet worden verwijderd', 'error')
         return redirect(url_for('dossier_detail', dossier_id=dossier_id))
     
+    # Start explicit transaction
     try:
-        # Delete related photos
-        for photo in taxatie.photos:
-            try:
-                storage.delete_file(photo.filename)
-            except Exception as e:
-                print(f"Error deleting photo file: {e}")
+        app.logger.info(f"Starting deletion of taxatie {taxatie_id}")
         
-        # Delete status history
+        # Collect files to delete (outside transaction)
+        files_to_delete = []
+        for photo in taxatie.photos:
+            files_to_delete.append(photo.filename)
+        
+        # Delete related data step by step
+        app.logger.info(f"Deleting {len(taxatie.photos)} photos from database")
+        for photo in taxatie.photos:
+            db.session.delete(photo)
+        db.session.flush()
+        
+        app.logger.info(f"Deleting {len(taxatie.status_history)} status history records")
         for status_log in taxatie.status_history:
             db.session.delete(status_log)
+        db.session.flush()
         
-        # Delete the taxatie
+        # Delete the taxatie itself
+        app.logger.info(f"Deleting taxatie {taxatie_id}")
         db.session.delete(taxatie)
+        
+        # Update modification tracking for dossier
+        dossier.update_modification_tracking(current_user.id)
+        
+        # Commit all changes at once
         db.session.commit()
+        app.logger.info(f"Successfully committed deletion of taxatie {taxatie_id}")
+        
+        # Now delete files from storage (after successful database commit)
+        for filename in files_to_delete:
+            try:
+                storage.delete_file(filename)
+                app.logger.info(f"Deleted photo file: {filename}")
+            except Exception as e:
+                app.logger.error(f"Error deleting photo file {filename}: {e}")
         
         flash('Taxatie succesvol verwijderd', 'success')
         return redirect(url_for('dossier_detail', dossier_id=dossier_id))
         
     except Exception as e:
         import traceback
-        print('Fout bij verwijderen taxatie:', e)
-        traceback.print_exc()
+        app.logger.error(f"Error deleting taxatie {taxatie_id}: {str(e)}")
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
         db.session.rollback()
         flash('Fout bij verwijderen taxatie', 'error')
         return redirect(url_for('dossier_detail', dossier_id=dossier_id))
