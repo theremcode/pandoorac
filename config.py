@@ -36,8 +36,8 @@ class Config:
     SQLALCHEMY_DATABASE_URI = get_database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
-    # File storage settings - MinIO as default
-    STORAGE_TYPE = os.environ.get('STORAGE_TYPE', 'minio')
+    # File storage settings - Local storage as default (mounted to Azure File Share in production)
+    STORAGE_TYPE = os.environ.get('STORAGE_TYPE', 'local')
     UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'uploads')
     
     # MinIO settings

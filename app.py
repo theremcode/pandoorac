@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, date
 import os
 import time
 import logging
@@ -67,7 +67,8 @@ class User(UserMixin, db.Model):
     first_login = db.Column(db.Boolean, nullable=False, default=True)
     first_login_at = db.Column(db.DateTime, nullable=True)
     
-    dossiers = db.relationship('Dossier', backref='user', lazy=True)
+    # Relationships with explicit foreign keys to avoid ambiguity
+    dossiers = db.relationship('Dossier', foreign_keys='Dossier.user_id', backref='user', lazy=True)
     logs = db.relationship('UserLog', backref='user', lazy=True)
 
     def set_password(self, password):
@@ -118,13 +119,23 @@ class Dossier(db.Model):
     aantal_bouwlagen = db.Column(db.String(10))
     gebruiksdoel = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    modified_at = db.Column(db.DateTime, nullable=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    last_editor_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     taxaties = db.relationship('Taxatie', backref='dossier', lazy=True)
     documents = db.relationship('Document', backref='dossier', lazy=True)
+    # Creator and last editor relationships with explicit foreign keys
+    creator = db.relationship('User', foreign_keys=[user_id], backref=db.backref('created_dossiers', overlaps="dossiers,user"), post_update=True, overlaps="dossiers,user")
+    last_editor = db.relationship('User', foreign_keys=[last_editor_id], backref='edited_dossiers', post_update=True)
     woz_data = db.relationship('WozData', lazy=True)
     bag_data = db.relationship('BagData', lazy=True)
     walkscore_data = db.relationship('WalkScoreData', lazy=True)
     pdok_data = db.relationship('PDOKData', lazy=True)
+    
+    def update_modification_tracking(self, editor_id):
+        """Update modification tracking when dossier is edited"""
+        self.modified_at = datetime.utcnow()
+        self.last_editor_id = editor_id
 
 class Taxatie(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -134,10 +145,21 @@ class Taxatie(db.Model):
     opmerkingen = db.Column(db.Text)
     status = db.Column(db.String(20), nullable=False, default='concept')
     # New fields for automatic calculation
+    oppervlakte = db.Column(db.Float, nullable=True)  # Surface area used for calculation
     hoogte_meters = db.Column(db.Float, nullable=True)
     prijs_per_m2 = db.Column(db.Float, nullable=True)
     prijs_per_m3 = db.Column(db.Float, nullable=True)
     berekening_methode = db.Column(db.String(20), nullable=True)  # 'm2' or 'm3'
+    subtotaal_waarde = db.Column(db.Float, nullable=True)  # Calculated base value before adjustments
+    # Extra adjustment fields (keep for backward compatibility)
+    extra_veld_1_naam = db.Column(db.String(100), nullable=True)
+    extra_veld_1_percentage = db.Column(db.Float, nullable=True)
+    extra_veld_2_naam = db.Column(db.String(100), nullable=True)
+    extra_veld_2_percentage = db.Column(db.Float, nullable=True)
+    extra_veld_3_naam = db.Column(db.String(100), nullable=True)
+    extra_veld_3_percentage = db.Column(db.Float, nullable=True)
+    # New field for unlimited dynamic adjustments (JSON)
+    aanpassingen = db.Column(db.Text, nullable=True)  # JSON string storing dynamic adjustments
     dossier_id = db.Column(db.Integer, db.ForeignKey('dossier.id'), nullable=False)
     photos = db.relationship('Photo', backref='taxatie', lazy=True)
     status_history = db.relationship('TaxatieStatusHistory', backref='taxatie', lazy=True, order_by='TaxatieStatusHistory.timestamp.desc()')
@@ -145,6 +167,43 @@ class Taxatie(db.Model):
     def can_edit(self):
         """Check if the taxatie can be edited based on its status"""
         return self.status != 'definitief'
+    
+    def get_aanpassingen(self):
+        """Get adjustments as list from JSON field or from legacy fields"""
+        import json
+        adjustments = []
+        
+        # Get from new JSON field first
+        if self.aanpassingen:
+            try:
+                adjustments = json.loads(self.aanpassingen)
+            except:
+                adjustments = []
+        
+        # Add legacy fields if JSON is empty and legacy fields exist
+        if not adjustments:
+            if self.extra_veld_1_naam and self.extra_veld_1_percentage is not None:
+                adjustments.append({
+                    'naam': self.extra_veld_1_naam,
+                    'percentage': self.extra_veld_1_percentage
+                })
+            if self.extra_veld_2_naam and self.extra_veld_2_percentage is not None:
+                adjustments.append({
+                    'naam': self.extra_veld_2_naam,
+                    'percentage': self.extra_veld_2_percentage
+                })
+            if self.extra_veld_3_naam and self.extra_veld_3_percentage is not None:
+                adjustments.append({
+                    'naam': self.extra_veld_3_naam,
+                    'percentage': self.extra_veld_3_percentage
+                })
+        
+        return adjustments
+    
+    def set_aanpassingen(self, adjustments_list):
+        """Set adjustments from list to JSON field"""
+        import json
+        self.aanpassingen = json.dumps(adjustments_list) if adjustments_list else None
     
     def calculate_value(self, oppervlakte=None, hoogte=None, prijs_per_m2=None, prijs_per_m3=None):
         """Calculate the property value based on function and dimensions"""
@@ -159,12 +218,40 @@ class Taxatie(db.Model):
             if not prijs_per_m3:
                 return None
             volume = float(oppervlakte) * hoogte
-            return volume * prijs_per_m3
+            subtotaal = volume * prijs_per_m3
         else:
             # Non-residential property: use m² calculation
             if not prijs_per_m2:
                 return None
-            return float(oppervlakte) * prijs_per_m2
+            subtotaal = float(oppervlakte) * prijs_per_m2
+        
+        # Store subtotaal for reference
+        self.subtotaal_waarde = subtotaal
+        
+        # Apply adjustments (use new method that handles both old and new format)
+        total_value = subtotaal
+        adjustments = self.get_aanpassingen()
+        for adjustment in adjustments:
+            if adjustment.get('percentage') is not None:
+                total_value += subtotaal * (adjustment['percentage'] / 100)
+            
+        return total_value
+    
+    def get_adjustments_summary(self):
+        """Get a summary of all value adjustments"""
+        adjustments = []
+        aanpassingen = self.get_aanpassingen()
+        
+        for adjustment in aanpassingen:
+            if adjustment.get('naam') and adjustment.get('percentage') is not None:
+                adjustments.append({
+                    'naam': adjustment['naam'],
+                    'percentage': adjustment['percentage'],
+                    'bedrag': (self.subtotaal_waarde or 0) * (adjustment['percentage'] / 100) if self.subtotaal_waarde else 0
+                })
+                
+        return adjustments
+        return adjustments
     
     def change_status(self, new_status, user_id):
         """Change the status and log the change"""
@@ -182,7 +269,7 @@ class Taxatie(db.Model):
             user_id=user_id
         )
         db.session.add(status_log)
-        db.session.commit()
+        # Note: Don't commit here, let the caller handle the commit
 
 class TaxatieStatusHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -1179,8 +1266,8 @@ def google_callback():
 @app.route('/dossiers')
 @login_required
 def dossiers():
-    user_dossiers = Dossier.query.filter_by(user_id=current_user.id).all()
-    return render_template('dossiers.html', dossiers=user_dossiers)
+    all_dossiers = Dossier.query.order_by(Dossier.created_at.desc()).all()
+    return render_template('dossiers.html', dossiers=all_dossiers)
 
 @app.route('/welcome')
 @login_required
@@ -1214,7 +1301,9 @@ def nieuw_dossier():
             hoogte=request.form.get('hoogte'),
             aantal_bouwlagen=request.form.get('aantal_bouwlagen'),
             gebruiksdoel=request.form.get('gebruiksdoel'),
-            user_id=current_user.id
+            user_id=current_user.id,
+            last_editor_id=current_user.id,
+            modified_at=datetime.utcnow()
         )
         db.session.add(dossier)
         db.session.commit()
@@ -1300,8 +1389,6 @@ def nieuw_dossier():
 @login_required
 def dossier_detail(dossier_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     # Haal eerste bag_data record op
     bag = dossier.bag_data[0] if dossier.bag_data else None
     bag_terugmeldingen = []
@@ -1373,28 +1460,68 @@ def dossier_detail(dossier_id):
 @login_required
 def nieuwe_taxatie(dossier_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     if request.method == 'POST':
         # Get calculation fields
+        oppervlakte = request.form.get('oppervlakte')
         hoogte_meters = request.form.get('hoogte_meters')
         prijs_per_m2 = request.form.get('prijs_per_m2')
         prijs_per_m3 = request.form.get('prijs_per_m3')
         berekening_methode = request.form.get('berekening_methode')
+        subtotaal_waarde = request.form.get('subtotaal_waarde')
+        
+        # Get extra adjustment fields (legacy support)
+        extra_veld_1_naam = request.form.get('extra_veld_1_naam')
+        extra_veld_1_percentage = request.form.get('extra_veld_1_percentage')
+        extra_veld_2_naam = request.form.get('extra_veld_2_naam')
+        extra_veld_2_percentage = request.form.get('extra_veld_2_percentage')
+        extra_veld_3_naam = request.form.get('extra_veld_3_naam')
+        extra_veld_3_percentage = request.form.get('extra_veld_3_percentage')
+        
+        # Get dynamic adjustments
+        aanpassing_namen = request.form.getlist('aanpassing_naam[]')
+        aanpassing_percentages = request.form.getlist('aanpassing_percentage[]')
+        
+        # Create adjustments list from dynamic fields
+        adjustments = []
+        for i, naam in enumerate(aanpassing_namen):
+            if naam and i < len(aanpassing_percentages) and aanpassing_percentages[i]:
+                try:
+                    percentage = float(aanpassing_percentages[i])
+                    adjustments.append({
+                        'naam': naam,
+                        'percentage': percentage
+                    })
+                except ValueError:
+                    pass  # Skip invalid percentages
         
         taxatie = Taxatie(
             datum=datetime.strptime(request.form.get('datum'), '%Y-%m-%d').date(),
             taxateur=request.form.get('taxateur'),
             waarde=float(request.form.get('waarde')),
             opmerkingen=request.form.get('opmerkingen'),
+            oppervlakte=float(oppervlakte) if oppervlakte else None,
             hoogte_meters=float(hoogte_meters) if hoogte_meters else None,
             prijs_per_m2=float(prijs_per_m2) if prijs_per_m2 else None,
             prijs_per_m3=float(prijs_per_m3) if prijs_per_m3 else None,
             berekening_methode=berekening_methode,
+            subtotaal_waarde=float(subtotaal_waarde) if subtotaal_waarde else None,
+            extra_veld_1_naam=extra_veld_1_naam if extra_veld_1_naam else None,
+            extra_veld_1_percentage=float(extra_veld_1_percentage) if extra_veld_1_percentage else None,
+            extra_veld_2_naam=extra_veld_2_naam if extra_veld_2_naam else None,
+            extra_veld_2_percentage=float(extra_veld_2_percentage) if extra_veld_2_percentage else None,
+            extra_veld_3_naam=extra_veld_3_naam if extra_veld_3_naam else None,
+            extra_veld_3_percentage=float(extra_veld_3_percentage) if extra_veld_3_percentage else None,
             dossier_id=dossier_id
         )
+        
+        # Set dynamic adjustments
+        if adjustments:
+            taxatie.set_aanpassingen(adjustments)
+            
         db.session.add(taxatie)
+        # Update modification tracking for dossier when taxatie is added
+        dossier.update_modification_tracking(current_user.id)
         db.session.commit()
         
         # Handle photo uploads
@@ -1415,14 +1542,16 @@ def nieuwe_taxatie(dossier_id):
         flash('Taxatie succesvol aangemaakt', 'success')
         return redirect(url_for('dossier_detail', dossier_id=dossier_id))
     
-    return render_template('nieuwe_taxatie.html', dossier=dossier)
+    return render_template('taxatie_unified.html', 
+                          dossier=dossier, 
+                          taxatie=None,
+                          action_url=url_for('nieuwe_taxatie', dossier_id=dossier_id),
+                          date=date)
 
 @app.route('/dossier/<int:dossier_id>/taxatie/<int:taxatie_id>/bewerken', methods=['GET', 'POST'])
 @login_required
 def bewerk_taxatie(dossier_id, taxatie_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     taxatie = Taxatie.query.get_or_404(taxatie_id)
     if taxatie.dossier_id != dossier_id:
@@ -1445,11 +1574,50 @@ def bewerk_taxatie(dossier_id, taxatie_id):
         prijs_per_m2 = request.form.get('prijs_per_m2')
         prijs_per_m3 = request.form.get('prijs_per_m3')
         berekening_methode = request.form.get('berekening_methode')
+        subtotaal_waarde = request.form.get('subtotaal_waarde')
+        
+        # Update extra adjustment fields (legacy support)
+        extra_veld_1_naam = request.form.get('extra_veld_1_naam')
+        extra_veld_1_percentage = request.form.get('extra_veld_1_percentage')
+        extra_veld_2_naam = request.form.get('extra_veld_2_naam')
+        extra_veld_2_percentage = request.form.get('extra_veld_2_percentage')
+        extra_veld_3_naam = request.form.get('extra_veld_3_naam')
+        extra_veld_3_percentage = request.form.get('extra_veld_3_percentage')
+        
+        # Get dynamic adjustments
+        aanpassing_namen = request.form.getlist('aanpassing_naam[]')
+        aanpassing_percentages = request.form.getlist('aanpassing_percentage[]')
+        
+        # Create adjustments list from dynamic fields
+        adjustments = []
+        for i, naam in enumerate(aanpassing_namen):
+            if naam and i < len(aanpassing_percentages) and aanpassing_percentages[i]:
+                try:
+                    percentage = float(aanpassing_percentages[i])
+                    adjustments.append({
+                        'naam': naam,
+                        'percentage': percentage
+                    })
+                except ValueError:
+                    pass  # Skip invalid percentages
         
         taxatie.hoogte_meters = float(hoogte_meters) if hoogte_meters else None
         taxatie.prijs_per_m2 = float(prijs_per_m2) if prijs_per_m2 else None
         taxatie.prijs_per_m3 = float(prijs_per_m3) if prijs_per_m3 else None
         taxatie.berekening_methode = berekening_methode
+        taxatie.subtotaal_waarde = float(subtotaal_waarde) if subtotaal_waarde else None
+        taxatie.extra_veld_1_naam = extra_veld_1_naam if extra_veld_1_naam else None
+        taxatie.extra_veld_1_percentage = float(extra_veld_1_percentage) if extra_veld_1_percentage else None
+        taxatie.extra_veld_2_naam = extra_veld_2_naam if extra_veld_2_naam else None
+        taxatie.extra_veld_2_percentage = float(extra_veld_2_percentage) if extra_veld_2_percentage else None
+        taxatie.extra_veld_3_naam = extra_veld_3_naam if extra_veld_3_naam else None
+        taxatie.extra_veld_3_percentage = float(extra_veld_3_percentage) if extra_veld_3_percentage else None
+        
+        # Update dynamic adjustments
+        if adjustments:
+            taxatie.set_aanpassingen(adjustments)
+        else:
+            taxatie.aanpassingen = None  # Clear if no adjustments
         
         # Handle photo uploads
         if 'photos' in request.files:
@@ -1464,18 +1632,22 @@ def bewerk_taxatie(dossier_id, taxatie_id):
                     )
                     db.session.add(photo_record)
         
+        # Update modification tracking for dossier when taxatie is modified
+        dossier.update_modification_tracking(current_user.id)
         db.session.commit()
         flash('Taxatie succesvol bijgewerkt', 'success')
         return redirect(url_for('dossier_detail', dossier_id=dossier_id))
     
-    return render_template('bewerk_taxatie.html', dossier=dossier, taxatie=taxatie)
+    return render_template('taxatie_unified.html', 
+                          dossier=dossier, 
+                          taxatie=taxatie,
+                          action_url=url_for('bewerk_taxatie', dossier_id=dossier_id, taxatie_id=taxatie_id),
+                          date=date)
 
 @app.route('/dossier/<int:dossier_id>/taxatie/<int:taxatie_id>/status', methods=['POST'])
 @login_required
 def wijzig_taxatie_status(dossier_id, taxatie_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     taxatie = Taxatie.query.get_or_404(taxatie_id)
     if taxatie.dossier_id != dossier_id:
@@ -1488,6 +1660,9 @@ def wijzig_taxatie_status(dossier_id, taxatie_id):
     
     try:
         taxatie.change_status(new_status, current_user.id)
+        # Update modification tracking for dossier when taxatie status changes
+        dossier.update_modification_tracking(current_user.id)
+        db.session.commit()
         flash(f'Status van taxatie gewijzigd naar "{new_status}"', 'success')
     except ValueError as e:
         flash(str(e), 'error')
@@ -1498,8 +1673,6 @@ def wijzig_taxatie_status(dossier_id, taxatie_id):
 @login_required
 def upload_document(dossier_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     if 'document' not in request.files:
         flash('No file part')
@@ -1519,6 +1692,8 @@ def upload_document(dossier_id):
             dossier_id=dossier_id
         )
         db.session.add(document)
+        # Update modification tracking
+        dossier.update_modification_tracking(current_user.id)
         db.session.commit()
         flash('Document uploaded successfully')
     else:
@@ -1529,11 +1704,9 @@ def upload_document(dossier_id):
 @app.route('/document/<int:document_id>')
 @login_required
 def get_document(document_id):
+    """Download document als attachment"""
     document = Document.query.get_or_404(document_id)
     dossier = Dossier.query.get_or_404(document.dossier_id)
-    
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     try:
         file_data = storage.get_file(document.filename)
@@ -1547,15 +1720,67 @@ def get_document(document_id):
         flash('Error retrieving document')
         return redirect(url_for('dossier_detail', dossier_id=document.dossier_id))
 
+@app.route('/document/<int:document_id>/preview')
+@login_required
+def preview_document(document_id):
+    """Preview document inline (voor PDF's en andere viewable formaten)"""
+    document = Document.query.get_or_404(document_id)
+    dossier = Dossier.query.get_or_404(document.dossier_id)
+    
+    try:
+        file_data = storage.get_file(document.filename)
+        
+        # Voor PDF's en andere viewable types, toon inline
+        if document.file_type in ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'text/plain']:
+            return send_file(
+                io.BytesIO(file_data),
+                mimetype=document.file_type,
+                as_attachment=False  # Dit zorgt voor inline weergave
+            )
+        else:
+            # Voor andere bestandstypes, download alsnog
+            return send_file(
+                io.BytesIO(file_data),
+                mimetype=document.file_type,
+                as_attachment=True,
+                download_name=document.original_filename
+            )
+    except Exception as e:
+        flash('Error retrieving document')
+        return redirect(url_for('dossier_detail', dossier_id=document.dossier_id))
+
+@app.route('/document/<int:document_id>/delete', methods=['POST'])
+@login_required
+def delete_document(document_id):
+    """Verwijder document"""
+    document = Document.query.get_or_404(document_id)
+    dossier = Dossier.query.get_or_404(document.dossier_id)
+    
+    try:
+        # Verwijder bestand uit storage
+        storage.delete_file(document.filename)
+        
+        # Verwijder document uit database
+        db.session.delete(document)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Document "{document.original_filename}" is succesvol verwijderd.'
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Fout bij verwijderen van document: {str(e)}'
+        }), 500
+
 @app.route('/photo/<int:photo_id>')
 @login_required
 def get_photo(photo_id):
     photo = Photo.query.get_or_404(photo_id)
     taxatie = Taxatie.query.get_or_404(photo.taxatie_id)
     dossier = Dossier.query.get_or_404(taxatie.dossier_id)
-    
-    if dossier.user_id != current_user.id:
-        return redirect(url_for('dossiers'))
     
     try:
         file_data = storage.get_file(photo.filename)
@@ -1815,8 +2040,6 @@ def bag_lookup_and_save():
     try:
         # Check if dossier exists and user has access
         dossier = Dossier.query.get_or_404(dossier_id)
-        if dossier.user_id != current_user.id:
-            return jsonify({'error': 'Geen toegang tot dit dossier'}), 403
         
         api_url = get_setting('BAG_API_URL')
         api_key = get_setting('BAG_API_KEY')
@@ -1905,6 +2128,9 @@ def bag_lookup_and_save():
                 else:
                     dossier.gebruiksdoel = str(result['gebruiksdoel']) if result['gebruiksdoel'] else None
             
+            # Update modification tracking
+            dossier.update_modification_tracking(current_user.id)
+            
             db.session.commit()
             
             return jsonify({
@@ -1973,12 +2199,12 @@ def woz_lookup_and_save():
     try:
         # Check if dossier exists and user has access
         dossier = Dossier.query.get_or_404(dossier_id)
-        if dossier.user_id != current_user.id:
-            return jsonify({'error': 'Geen toegang tot dit dossier'}), 403
         
         # Check if WOZ data already exists for this dossier
         existing_woz = WozData.query.filter_by(dossier_id=dossier_id).first()
         
+        # NOTE: WOZ service currently uses mock data for development/testing
+        # Real WOZ API integration is not yet implemented
         woz_service = WozService()
         woz_response = woz_service.lookup_woz_data(address)
         
@@ -2028,6 +2254,9 @@ def woz_lookup_and_save():
                     vastgestelde_waarde=value_data['vastgestelde_waarde']
                 )
                 db.session.add(woz_value)
+            
+            # Update modification tracking
+            dossier.update_modification_tracking(current_user.id)
             
             db.session.commit()
             
@@ -2101,8 +2330,6 @@ def walkscore_lookup_and_save():
     try:
         # Check if dossier exists and user has access
         dossier = Dossier.query.get_or_404(dossier_id)
-        if dossier.user_id != current_user.id:
-            return jsonify({'error': 'Geen toegang tot dit dossier'}), 403
         
         api_url = get_setting('WALKSCORE_API_URL')
         api_key = get_setting('WALKSCORE_API_KEY')
@@ -2188,6 +2415,9 @@ def walkscore_lookup_and_save():
             
             if not existing_walkscore:
                 db.session.add(walkscore_data)
+            
+            # Update modification tracking
+            dossier.update_modification_tracking(current_user.id)
             
             db.session.commit()
             
@@ -2430,6 +2660,9 @@ def pdok_lookup_and_save():
             )
             db.session.add(pdok_data)
         
+        # Update modification tracking
+        dossier.update_modification_tracking(current_user.id)
+        
         db.session.commit()
         
         return jsonify({
@@ -2531,8 +2764,8 @@ def search_dossiers():
     filter_type = request.args.get('filter', 'all')
     sort_by = request.args.get('sort', 'created_date_desc')
     
-    # Base query - only user's dossiers
-    dossiers_query = Dossier.query.filter_by(user_id=current_user.id)
+    # Base query - all dossiers
+    dossiers_query = Dossier.query
     
     # Apply search filter
     if query:
@@ -2650,8 +2883,6 @@ def get_dossier_map_data(dossier_id):
     try:
         # Check if dossier exists and user has access
         dossier = Dossier.query.get_or_404(dossier_id)
-        if dossier.user_id != current_user.id:
-            return jsonify({'error': 'Geen toegang tot dit dossier'}), 403
         
         # Get BAG data for this dossier
         bag_data = BagData.query.filter_by(dossier_id=dossier_id).first()
@@ -2722,9 +2953,6 @@ def serve_upload(filename):
 def verwijder_dossier(dossier_id):
     """Delete a dossier if it has no taxaties"""
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        flash('Je hebt geen toegang tot dit dossier', 'error')
-        return redirect(url_for('dossiers'))
     
     # Check if dossier has taxaties
     if dossier.taxaties:
@@ -2760,9 +2988,6 @@ def verwijder_dossier(dossier_id):
 def verwijder_taxatie(dossier_id, taxatie_id):
     """Delete a taxatie"""
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        flash('Je hebt geen toegang tot dit dossier', 'error')
-        return redirect(url_for('dossiers'))
     
     taxatie = Taxatie.query.get_or_404(taxatie_id)
     if taxatie.dossier_id != dossier_id:
@@ -2946,17 +3171,376 @@ def startup_health_check():
 @login_required
 def wijzig_dossier_naam(dossier_id):
     dossier = Dossier.query.get_or_404(dossier_id)
-    if dossier.user_id != current_user.id:
-        flash('Geen toegang tot dit dossier', 'danger')
-        return redirect(url_for('dossier_detail', dossier_id=dossier_id))
     nieuwe_naam = request.form.get('nieuwe_naam', '').strip()
     if not nieuwe_naam:
         flash('Naam mag niet leeg zijn', 'danger')
         return redirect(url_for('dossier_detail', dossier_id=dossier_id))
     dossier.naam = nieuwe_naam
+    # Update modification tracking
+    dossier.update_modification_tracking(current_user.id)
     db.session.commit()
     flash('Dossiernaam succesvol gewijzigd', 'success')
     return redirect(url_for('dossier_detail', dossier_id=dossier_id))
+
+@app.route('/api/dossier/<int:dossier_id>/documents')
+@login_required
+def get_dossier_documents(dossier_id):
+    """API endpoint om documenten van een dossier op te halen (voor AJAX updates)"""
+    dossier = Dossier.query.get_or_404(dossier_id)
+    
+    documents_html = ""
+    if dossier.documents:
+        # Start van de list-group
+        documents_html += '<div class="list-group">'
+        documents_list = sorted(dossier.documents, key=lambda x: x.uploaded_at, reverse=True)
+        for document in documents_list:
+            file_type_display = document.file_type.split('/')[-1].upper() if document.file_type else ''
+            # Bestandsgrootte is momenteel niet beschikbaar
+            file_size_kb = '?'
+            
+            documents_html += f'''
+            <div class="list-group-item">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center">
+                            <i class="bi bi-file-earmark-text me-2 text-primary"></i>
+                            <div>
+                                <strong class="text-break">{document.original_filename}</strong>
+                                <small class="text-muted d-block">
+                                    <i class="bi bi-calendar3"></i> {document.uploaded_at.strftime('%d-%m-%Y')}
+                                    <span class="badge bg-light text-dark ms-2">{file_type_display}</span>
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" 
+                                data-bs-toggle="dropdown" aria-expanded="false"
+                                title="Document acties">
+                            <i class="bi bi-three-dots-vertical"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item" href="javascript:void(0);" 
+                                   onclick="previewDocument({document.id}, '{document.original_filename}', '{document.file_type}')"
+                                   title="Document bekijken">
+                                    <i class="bi bi-eye text-primary"></i> Preview
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{url_for('get_document', document_id=document.id)}"
+                                   title="Document downloaden">
+                                    <i class="bi bi-download text-secondary"></i> Download
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item text-danger" href="javascript:void(0);"
+                                   onclick="deleteDocument({document.id}, '{document.original_filename}')"
+                                   title="Document verwijderen">
+                                    <i class="bi bi-trash text-danger"></i> Verwijderen
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <span class="dropdown-item-text small text-muted">
+                                    <i class="bi bi-info-circle"></i> 
+                                    Grootte: {file_size_kb} KB
+                                </span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            '''
+        
+        # Einde van list-group
+        documents_html += '</div>'
+        
+        # Document statistieken
+        total_docs = len(dossier.documents)
+        total_size_mb = 0
+        # Note: file_size is niet beschikbaar in Document model
+        # if dossier.documents and dossier.documents[0].file_size:
+        #     total_size = sum(doc.file_size for doc in dossier.documents if doc.file_size)
+        #     total_size_mb = round(total_size / 1024 / 1024, 1)
+        
+        documents_html += f'''
+        <div class="mt-3 pt-2 border-top">
+            <small class="text-muted">
+                <i class="bi bi-files"></i> 
+                Totaal {total_docs} document{"s" if total_docs != 1 else ""}
+                {f"- {total_size_mb} MB" if total_size_mb > 0 else ""}
+            </small>
+        </div>
+        '''
+    else:
+        documents_html = '''
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> Geen documenten beschikbaar.
+        </div>
+        '''
+    
+    return jsonify({'html': documents_html})
+
+@app.route('/api/dossier/<int:dossier_id>/genereer_rapport/<int:taxatie_id>', methods=['POST'])
+@login_required
+def genereer_taxatie_rapport_ajax(dossier_id, taxatie_id):
+    """AJAX endpoint voor PDF rapport generatie die alleen het document opslaat"""
+    try:
+        # Import hier om circulaire import te voorkomen
+        from pdf_report_service import PDFReportService
+        
+        dossier = Dossier.query.get_or_404(dossier_id)
+        taxatie = Taxatie.query.filter_by(id=taxatie_id, dossier_id=dossier_id).first_or_404()
+        
+        # PDF service instantiëren
+        pdf_service = PDFReportService(app)
+        
+        # PDF genereren
+        pdf_data, generated_filename = pdf_service.generate_taxatie_rapport(dossier, taxatie)
+        
+        if not pdf_data:
+            return jsonify({'success': False, 'message': 'Fout bij het genereren van het rapport'})
+        
+        # Bestandsnaam genereren
+        datum_str = datetime.now().strftime('%Y%m%d_%H%M')
+        filename = f"Taxatierapport_{dossier.naam}_{datum_str}.pdf"
+        safe_filename = "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
+        
+        # PDF opslaan als document in het dossier
+        try:
+            from io import BytesIO
+            
+            class PDFFile:
+                """Custom file-like object voor PDF data met filename attribuut"""
+                def __init__(self, data, filename):
+                    self.data = data
+                    self.filename = filename
+                    self._buffer = BytesIO(data)
+                
+                def read(self, size=-1):
+                    return self._buffer.read(size)
+                
+                def seek(self, pos, whence=0):
+                    return self._buffer.seek(pos, whence)
+                
+                def tell(self):
+                    return self._buffer.tell()
+                
+                def readable(self):
+                    return True
+                
+                def seekable(self):
+                    return True
+                
+                def save(self, filepath):
+                    """Save PDF data to file path"""
+                    with open(filepath, 'wb') as f:
+                        f.write(self.data)
+                
+                def close(self):
+                    if hasattr(self, '_buffer') and self._buffer:
+                        self._buffer.close()
+            
+            # Create PDF file object
+            pdf_file = PDFFile(pdf_data, safe_filename)
+            
+            # Upload via de storage service
+            stored_filename = storage.upload_file(pdf_file, folder=f'dossiers/{dossier_id}')
+            
+            # Maak document record aan
+            document = Document(
+                dossier_id=dossier_id,
+                filename=stored_filename,
+                original_filename=safe_filename,
+                file_type='application/pdf'
+            )
+            
+            db.session.add(document)
+            dossier.update_modification_tracking(current_user.id)
+            db.session.commit()
+            
+            # Stuur zowel download URL als document ID terug
+            download_url = url_for('get_document', document_id=document.id)
+            
+            return jsonify({
+                'success': True, 
+                'message': f'Taxatierapport "{safe_filename}" is gegenereerd en toegevoegd aan het dossier',
+                'download_url': download_url,
+                'document_id': document.id,
+                'filename': safe_filename
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            print(f"Fout bij opslaan PDF als document: {e}", flush=True)
+            return jsonify({'success': False, 'message': 'Rapport gegenereerd maar kon niet worden opgeslagen als document'})
+        
+    except Exception as e:
+        print(f"Fout bij genereren taxatierapport: {e}", flush=True)
+        return jsonify({'success': False, 'message': 'Er is een fout opgetreden bij het genereren van het rapport'})
+
+@app.route('/dossier/<int:dossier_id>/genereer_rapport/<int:taxatie_id>')
+@login_required
+def genereer_taxatie_rapport(dossier_id, taxatie_id):
+    """Genereer een PDF taxatierapport en sla het op als document"""
+    try:
+        # Import hier om circulaire import te voorkomen
+        from pdf_report_service import PDFReportService
+        
+        dossier = Dossier.query.get_or_404(dossier_id)
+        taxatie = Taxatie.query.filter_by(id=taxatie_id, dossier_id=dossier_id).first_or_404()
+        
+        # PDF service instantiëren
+        pdf_service = PDFReportService(app)
+        
+        # PDF genereren
+        pdf_data, generated_filename = pdf_service.generate_taxatie_rapport(dossier, taxatie)
+        
+        if not pdf_data:
+            flash('Fout bij het genereren van het rapport', 'danger')
+            return redirect(url_for('dossier_detail', dossier_id=dossier_id))
+        
+        # Bestandsnaam genereren
+        datum_str = datetime.now().strftime('%Y%m%d_%H%M')
+        filename = f"Taxatierapport_{dossier.naam}_{datum_str}.pdf"
+        safe_filename = "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
+        
+        # PDF opslaan als document in het dossier
+        try:
+            # Maak een file-like object van de PDF data voor de storage service
+            from io import BytesIO
+            
+            class PDFFile:
+                """Custom file-like object voor PDF data met filename attribuut"""
+                def __init__(self, data, filename):
+                    self.data = data
+                    self.filename = filename
+                    self._buffer = BytesIO(data)
+                
+                def read(self, size=-1):
+                    return self._buffer.read(size)
+                
+                def seek(self, pos, whence=0):
+                    """Seek met optionele whence parameter voor boto3 compatibility"""
+                    return self._buffer.seek(pos, whence)
+                
+                def tell(self):
+                    return self._buffer.tell()
+                
+                def readable(self):
+                    """Voor boto3 compatibility"""
+                    return True
+                
+                def seekable(self):
+                    """Voor boto3 compatibility"""
+                    return True
+                
+                def close(self):
+                    """Voor boto3 compatibility - close de onderliggende BytesIO buffer"""
+                    if hasattr(self, '_buffer') and self._buffer:
+                        self._buffer.close()
+                
+                def save(self, filepath):
+                    """Voor local storage compatibility"""
+                    with open(filepath, 'wb') as f:
+                        f.write(self.data)
+                
+                def __enter__(self):
+                    return self
+                
+                def __exit__(self, exc_type, exc_val, exc_tb):
+                    pass
+            
+            # Create PDF file object
+            pdf_file = PDFFile(pdf_data, safe_filename)
+            
+            # Upload via de storage service (consistent met andere document uploads)
+            stored_filename = storage.upload_file(pdf_file, folder=f'dossiers/{dossier_id}')
+            
+            # Maak document record aan (gebruik de juiste veldnamen voor het Document model)
+            document = Document(
+                dossier_id=dossier_id,
+                filename=stored_filename,
+                original_filename=safe_filename,
+                file_type='application/pdf'
+            )
+            
+            db.session.add(document)
+            # Update modification tracking voor dossier
+            dossier.update_modification_tracking(current_user.id)
+            db.session.commit()
+            
+            flash(f'Taxatierapport "{safe_filename}" is gegenereerd en toegevoegd aan het dossier', 'success')
+            
+        except Exception as e:
+            db.session.rollback()
+            stored_filename = "unknown_file"  # Fallback voor debug logging
+            print(f"Fout bij opslaan PDF als document: {e}", flush=True)
+            print(f"Document fields: dossier_id={dossier_id}, filename={stored_filename}, original_filename={safe_filename}", flush=True)
+            import traceback
+            traceback.print_exc()
+            flash('Rapport gegenereerd maar kon niet worden opgeslagen als document', 'warning')
+        
+        # Stuur PDF naar browser voor weergave/download
+        response = make_response(pdf_data)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'inline; filename="{safe_filename}"'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Fout bij genereren taxatierapport: {e}", flush=True)
+        flash('Er is een fout opgetreden bij het genereren van het rapport', 'danger')
+        return redirect(url_for('dossier_detail', dossier_id=dossier_id))
+
+@app.route('/dossier/<int:dossier_id>/download_rapport/<int:taxatie_id>')
+@login_required 
+def download_taxatie_rapport(dossier_id, taxatie_id):
+    """Download een PDF taxatierapport direct zonder opslaan"""
+    try:
+        # Import hier om circulaire import te voorkomen
+        from pdf_report_service import PDFReportService
+        
+        dossier = Dossier.query.get_or_404(dossier_id)
+        taxatie = Taxatie.query.filter_by(id=taxatie_id, dossier_id=dossier_id).first_or_404()
+        
+        # PDF service instantiëren
+        pdf_service = PDFReportService(app)
+        
+        # PDF genereren
+        pdf_data, generated_filename = pdf_service.generate_taxatie_rapport(dossier, taxatie)
+        
+        if not pdf_data:
+            flash('Fout bij het genereren van het rapport', 'danger')
+            return redirect(url_for('dossier_detail', dossier_id=dossier_id))
+        
+        # Bestandsnaam genereren
+        datum_str = datetime.now().strftime('%Y%m%d_%H%M')
+        filename = f"Taxatierapport_{dossier.naam}_{datum_str}.pdf"
+        safe_filename = "".join(c for c in filename if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
+        
+        # Stuur PDF naar browser voor download
+        response = make_response(pdf_data)
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename="{safe_filename}"'
+        
+        return response
+        
+    except Exception as e:
+        print(f"Fout bij downloaden taxatierapport: {e}", flush=True)
+        flash('Er is een fout opgetreden bij het downloaden van het rapport', 'danger')
+        return redirect(url_for('dossier_detail', dossier_id=dossier_id))
+
+# Easter egg route
+@app.route('/karensa')
+@login_required
+def easter_egg():
+    """
+    Easter egg page - access with a special button or karensa code!
+    """
+    return render_template('easter_egg.html')
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True) 

@@ -81,48 +81,90 @@ class WozService:
             logger.error(f"Unexpected error getting address details: {e}")
             return None
     
-    def get_woz_data(self, nummeraanduiding_id):
+    def get_woz_data(self, nummeraanduiding_id, address_details=None):
         """Get WOZ data - for now using mock data since WOZ waardeloket API is not directly accessible"""
         try:
             logger.info(f"Getting WOZ data for nummeraanduiding: {nummeraanduiding_id}")
             
+            # IMPORTANT WARNING: This is mock data for development/testing purposes
+            logger.warning("⚠️  USING MOCK WOZ DATA - Real WOZ API integration not implemented yet")
+            
             # For now, return mock WOZ data since the WOZ waardeloket API is not directly accessible
             # In a real implementation, this would call the WOZ API
+            
+            # Use actual address details if provided, otherwise use defaults
+            if address_details:
+                woonplaats = address_details.get('woonplaatsnaam', 'Onbekende plaats')
+                straatnaam = address_details.get('straatnaam', 'Onbekende straat')
+                postcode = address_details.get('postcode', '0000XX')
+                huisnummer = address_details.get('huisnummer', 1)
+                huisletter = address_details.get('huis_nlt', '') if address_details.get('huis_nlt', '').isalpha() else ''
+                gemeentecode = address_details.get('gemeentecode', '0000')
+                adresseerbaarobject_id = address_details.get('adresseerbaarobject_id', f"0000010000{nummeraanduiding_id[-8:]}")
+            else:
+                # Fallback defaults
+                woonplaats = "Onbekende plaats"
+                straatnaam = "Onbekende straat"
+                postcode = "0000XX"
+                huisnummer = 1
+                huisletter = ""
+                gemeentecode = "0000"
+                adresseerbaarobject_id = f"0000010000{nummeraanduiding_id[-8:]}"
+            
+            # Generate realistic WOZ values based on location
+            base_value = 350000  # Base WOZ value
+            
+            # Adjust base value based on postcode (rough estimation)
+            if postcode.startswith('1'):  # Amsterdam area
+                base_value = 500000
+            elif postcode.startswith('2'):  # Rotterdam/Den Haag area
+                base_value = 400000
+            elif postcode.startswith('3'):  # Utrecht area
+                base_value = 450000
+            elif postcode.startswith('4'):  # Zuid-Holland
+                base_value = 380000
+            elif postcode.startswith('5'):  # Noord-Brabant
+                base_value = 320000
+            
+            # Generate some variation based on address
+            hash_value = hash(f"{straatnaam}{huisnummer}{postcode}") % 100000
+            value_variation = hash_value - 50000  # -50k to +50k variation
+            
+            current_year = datetime.now().year
+            woz_waarden = []
+            
+            for year_offset in range(3):  # Current year and 2 previous years
+                year = current_year - year_offset
+                # Add slight year-over-year growth (roughly 3-5% per year)
+                yearly_value = int(base_value + value_variation * (1 + (year_offset * 0.04)))
+                
+                woz_waarden.append({
+                    "peildatum": f"{year}-01-01",
+                    "vastgesteldeWaarde": yearly_value
+                })
+            
             mock_woz_data = {
                 "wozObject": {
                     "wozobjectnummer": f"WOZ-{nummeraanduiding_id[-8:]}",
-                    "woonplaatsnaam": "'s-Gravenhage",
-                    "openbareruimtenaam": "Pippelingstraat",
-                    "straatnaam": "Pippelingstraat",
-                    "postcode": "2564RC",
-                    "huisnummer": 31,
-                    "huisletter": "",
+                    "woonplaatsnaam": woonplaats,
+                    "openbareruimtenaam": straatnaam,
+                    "straatnaam": straatnaam,
+                    "postcode": postcode,
+                    "huisnummer": huisnummer,
+                    "huisletter": huisletter,
                     "huisnummertoevoeging": "",
-                    "gemeentecode": "0518",
-                    "grondoppervlakte": 120,
-                    "adresseerbaarobjectid": f"0518010000{nummeraanduiding_id[-8:]}",
+                    "gemeentecode": gemeentecode,
+                    "grondoppervlakte": 120 + (hash_value % 200),  # 120-320 m²
+                    "adresseerbaarobjectid": adresseerbaarobject_id,
                     "nummeraanduidingid": nummeraanduiding_id,
-                    "kadastrale_gemeente_code": "0518",
-                    "kadastrale_sectie": "A",
-                    "kadastraal_perceel_nummer": "1234"
+                    "kadastrale_gemeente_code": gemeentecode,
+                    "kadastrale_sectie": chr(65 + (hash_value % 26)),  # A-Z
+                    "kadastraal_perceel_nummer": str(1000 + (hash_value % 9000))  # 1000-9999
                 },
-                "wozWaarden": [
-                    {
-                        "peildatum": "2025-01-01",
-                        "vastgesteldeWaarde": 450000
-                    },
-                    {
-                        "peildatum": "2024-01-01", 
-                        "vastgesteldeWaarde": 425000
-                    },
-                    {
-                        "peildatum": "2023-01-01",
-                        "vastgesteldeWaarde": 400000
-                    }
-                ]
+                "wozWaarden": woz_waarden
             }
             
-            logger.info(f"Returning mock WOZ data: {mock_woz_data}")
+            logger.info(f"Returning realistic mock WOZ data for {straatnaam} {huisnummer}, {postcode} {woonplaats}")
             return mock_woz_data
                 
         except Exception as e:
@@ -153,7 +195,7 @@ class WozService:
                 return None
             
             logger.info(f"Getting WOZ data for nummeraanduiding: {nummeraanduiding_id}")
-            woz_data = self.get_woz_data(nummeraanduiding_id)
+            woz_data = self.get_woz_data(nummeraanduiding_id, address_details)
             
             if woz_data:
                 # Combine address details with WOZ data

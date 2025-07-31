@@ -29,13 +29,12 @@ redis:
   storageClass: managed-premium
   storageSize: 5Gi
 
-minio:
+# Local storage configuration (Azure File Share via PVC)
+localStorage:
   enabled: true
-  image: minio/minio:latest
-  accessKey: minioadmin
-  secretKey: minioadmin123
-  storageClass: azure-storage
-  storageSize: 20Gi
+  storageClass: azure-storage  # This will automatically create an Azure File Share
+  storageSize: 10Gi
+  mountPath: "/app/uploads"  # Where to mount the storage in the container
 
 backup:
   enabled: true  # Enable backup now that basic deployment is working

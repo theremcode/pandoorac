@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <title>Taxatierapport - {{ dossier.naam }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm 2cm;
+            @top-center {
+                content: "Taxatierapport - {{ dossier.naam }}";
+                font-size: 9pt;
+                color: #888;
+                border-bottom: 1px solid #eee;
+                padding-bottom: 5px;
+            }
+            @bottom-center {
+                content: "Pagina " counter(page) " van " counter(pages) " • Pandoorac • " attr(data-datum);
+                font-size: 8pt;
+                color: #888;
+                border-top: 1px solid #eee;
+                padding-top: 5px;
+            }
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.5;
+            color: #2c3e50;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        }
+        
+        .header {
+            text-align: center;
+            background: linear-gradient(135deg, #2c5aa0 0%, #1e3a8a 100%);
+            color: white;
+            padding: 30px 20px;
+            margin: -1.5cm -2cm 30px -2cm;
+            border-radius: 0 0 15px 15px;
+            /* box-shadow removed for WeasyPrint compatibility */
+        }
+        
+        .header h1 {
+            color: white;
+            font-size: 28pt;
+            margin: 0 0 15px 0;
+            font-weight: 300;
+            letter-spacing: 2px;
+            /* text-shadow removed for WeasyPrint compatibility */
+        }
+        
+        .header .subtitle {
+            font-size: 14pt;
+            color: rgba(255, 255, 255, 0.9);
+            margin: 8px 0;
+            font-weight: 300;
+        }
+        
+        .header .meta-info {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            font-size: 10pt;
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .section {
+            margin-bottom: 30px;
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            /* box-shadow removed for WeasyPrint compatibility */
+            border: 1px solid #e9ecef;
+        }
+        
+        .section h2 {
+            color: #2c5aa0;
+            font-size: 18pt;
+            font-weight: 600;
+            border-bottom: 3px solid #e3f2fd;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        .section h2::before {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 0;
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, #2c5aa0, #1e3a8a);
+            border-radius: 2px;
+        }
+        
+        .section h3 {
+            color: #495057;
+            font-size: 14pt;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+        
+        .info-box {
+            border: 1px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            /* box-shadow removed for WeasyPrint compatibility */
+            transition: all 0.3s ease;
+        }
+        
+        /* .info-box:hover removed for WeasyPrint compatibility */
+        
+        .info-box h4 {
+            margin: 0 0 15px 0;
+            color: #2c5aa0;
+            font-size: 13pt;
+            font-weight: 600;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e3f2fd;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            /* box-shadow removed for WeasyPrint compatibility */
+        }
+        
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+        }
+        
+        th {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            font-weight: 600;
+            color: #2c5aa0;
+            font-size: 11pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        td {
+            font-size: 10pt;
+            color: #495057;
+        }
+        
+        tr:last-child td {
+            border-bottom: none;
+        }
+        
+        tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .highlight-value {
+            font-size: 24pt;
+            font-weight: 700;
+            color: #2c5aa0;
+            text-align: center;
+            padding: 25px;
+            background: linear-gradient(135deg, #e3f2fd 0%, #ffffff 100%);
+            border: 3px solid #2c5aa0;
+            border-radius: 15px;
+            margin: 20px 0;
+            /* box-shadow removed for WeasyPrint compatibility */
+            /* text-shadow removed for WeasyPrint compatibility */
+        }
+        
+        .map-container {
+            text-align: center;
+            margin: 25px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            /* box-shadow removed for WeasyPrint compatibility */
+        }
+        
+        .map-container img {
+            max-width: 100%;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            /* box-shadow removed for WeasyPrint compatibility */
+        }
+        
+        .footer {
+            margin-top: 40px;
+            text-align: center;
+            font-size: 8pt;
+            color: #6c757d;
+            border-top: 2px solid #e9ecef;
+            padding-top: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        
+        .page-break {
+            page-break-before: always;
+        }
+        
+        .calculation-box {
+            background: linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%);
+            border-left: 5px solid #2c5aa0;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            /* box-shadow removed for WeasyPrint compatibility */
+        }
+        
+        .calculation-box h4 {
+            color: #2c5aa0;
+            font-weight: 600;
+            margin-bottom: 15px;
+            font-size: 13pt;
+        }
+        
+        .adjustment-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px dotted #b0bec5;
+            font-size: 10pt;
+        }
+        
+        .adjustment-item:last-child {
+            border-bottom: 2px solid #2c5aa0;
+            font-weight: 700;
+            font-size: 11pt;
+            color: #2c5aa0;
+            margin-top: 10px;
+            padding-top: 15px;
+        }
+        
+        .commercial-note {
+            background: linear-gradient(135deg, #fff3cd 0%, #fef9e7 100%);
+            border: 2px solid #ffc107;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            /* box-shadow removed for WeasyPrint compatibility */
+        }
+        
+        .commercial-note h4 {
+            color: #856404;
+            margin: 0 0 15px 0;
+            font-weight: 600;
+            font-size: 13pt;
+        }
+        
+        .location-info {
+            background: linear-gradient(135deg, #d4edda 0%, #f0fff4 100%);
+            padding: 20px;
+            border-left: 5px solid #28a745;
+            border-radius: 10px;
+            margin: 20px 0;
+            /* box-shadow removed for WeasyPrint compatibility */
+        }
+        
+        .icon-value {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .icon-value::before {
+            content: '●';
+            color: #2c5aa0;
+            font-size: 12pt;
+        }
+        
+        /* Print specific optimizations */
+        @media print {
+            .section {
+                break-inside: avoid;
+            }
+            
+            .info-grid {
+                break-inside: avoid;
+            }
+            
+            .map-container {
+                break-inside: avoid;
+            }
+        }
+        
+        /* Enhanced visual elements */
+        .value-highlight {
+            background: linear-gradient(45deg, #2c5aa0, #1e3a8a);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 10pt;
+            font-weight: 600;
+            display: inline-block;
+            margin: 2px;
+            /* text-shadow removed for WeasyPrint compatibility */
+        }
+        
+        .status-badge {
+            background: #28a745;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 10px;
+            font-size: 9pt;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .meta-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 5px 0;
+        }
+        
+        /* Data highlighting */
+        .data-label {
+            color: #6c757d;
+            font-size: 9pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 3px;
+        }
+        
+        .data-value {
+            font-size: 12pt;
+            font-weight: 600;
+            color: #2c5aa0;
+        }
+        
+        /* Section styling improvements */
+        .highlight-section {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-left: 5px solid #2c5aa0;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <!-- HEADER -->
+    <div class="header">
+        <h1>TAXATIERAPPORT</h1>
+        <div class="subtitle">{{ dossier.naam }}</div>
+        <div class="subtitle">{{ dossier.adres }}, {{ dossier.postcode }} {{ dossier.plaats }}</div>
+        <div class="meta-info">
+            {{ dossier.gebruiksdoel|default('Commercieel vastgoed') }} • Rapport gegenereerd op {{ generatie_datum.strftime('%d-%m-%Y') }}
+        </div>
+    </div>
+
+    <!-- TAXATIEGEGEVENS -->
+    {% if taxatie %}
+    <div class="section">
+        <h2>Taxatiegegevens</h2>
+        
+        <div class="highlight-value">
+            Getaxeerde waarde: {{ taxatie.waarde|currency }}
+        </div>
+        
+        <div class="info-grid">
+            <div class="info-box">
+                <h4>Algemeen</h4>
+                <table>
+                    <tr><td><strong>Datum taxatie:</strong></td><td class="icon-value">{{ taxatie.datum.strftime('%d-%m-%Y') if taxatie.datum else '-' }}</td></tr>
+                    <tr><td><strong>Taxateur:</strong></td><td class="icon-value">{{ taxatie.taxateur }}</td></tr>
+                    <tr><td><strong>Status:</strong></td><td><span class="status-badge">{{ taxatie.status|title }}</span></td></tr>
+                </table>
+            </div>
+            
+            <div class="info-box">
+                <h4>Objectgegevens</h4>
+                <table>
+                    <tr><td><strong>Oppervlakte:</strong></td><td><span class="value-highlight">{{ taxatie.oppervlakte|default('-') }} m²</span></td></tr>
+                    <tr><td><strong>Hoogte:</strong></td><td><span class="value-highlight">{{ taxatie.hoogte_meters|default('-') }} m</span></td></tr>
+                    <tr><td><strong>Inhoud:</strong></td><td><span class="value-highlight">{% if taxatie.oppervlakte and taxatie.hoogte_meters %}{{ (taxatie.oppervlakte * taxatie.hoogte_meters)|round(1) }} m³{% else %}-{% endif %}</span></td></tr>
+                </table>
+            </div>
+        </div>
+        
+        <!-- COMMERCIEEL VASTGOED NOTE -->
+        <div class="commercial-note">
+            <h4>Commercieel Vastgoed Waardering</h4>
+            <p>Dit betreft een taxatie van commercieel vastgoed. De waardering is gebaseerd op marktconforme analyse, vergelijkbare transacties en rendementsbenadering. WOZ-waarden zijn niet relevant voor commerciële waarderingen.</p>
+        </div>
+        
+        <!-- BEREKENINGSDETAILS -->
+        {% if taxatie.prijs_per_m2 or taxatie.prijs_per_m3 %}
+        <div class="calculation-box">
+            <h4>Berekeningsdetails</h4>
+            {% if taxatie.prijs_per_m2 %}
+            <p><strong>Prijs per m²:</strong> {{ taxatie.prijs_per_m2|currency }}/m²</p>
+            <p><strong>Berekening:</strong> {{ taxatie.oppervlakte|default('-') }} m² × {{ taxatie.prijs_per_m2|currency }}/m² = {{ taxatie.subtotaal_waarde|currency }}</p>
+            {% elif taxatie.prijs_per_m3 %}
+            <p><strong>Prijs per m³:</strong> {{ taxatie.prijs_per_m3|currency }}/m³</p>
+            <p><strong>Berekening:</strong> {{ taxatie.oppervlakte|default('-') }} m² × {{ taxatie.hoogte_meters|default('-') }} m × {{ taxatie.prijs_per_m3|currency }}/m³ = {{ taxatie.subtotaal_waarde|currency }}</p>
+            {% endif %}
+            
+            <!-- WAARDEAANPASSINGEN -->
+            {% if taxatie.get_aanpassingen() %}
+            <h4 style="margin-top: 15px;">Waardeaanpassingen</h4>
+            {% for aanpassing in taxatie.get_aanpassingen() %}
+            <div class="adjustment-item">
+                <span>{{ aanpassing.naam }}</span>
+                <span>{{ aanpassing.percentage|percentage }}</span>
+            </div>
+            {% endfor %}
+            <div class="adjustment-item">
+                <span><strong>Eindwaarde na aanpassingen</strong></span>
+                <span><strong>{{ taxatie.waarde|currency }}</strong></span>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        {% if taxatie.opmerkingen %}
+        <div style="margin-top: 15px;">
+            <h4>Opmerkingen</h4>
+            <p style="background-color: #f9f9f9; padding: 10px; border-radius: 3px;">{{ taxatie.opmerkingen }}</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- PANDGEGEVENS -->
+    <div class="section">
+        <h2>Pandgegevens</h2>
+        
+        <div class="info-grid">
+            <div class="info-box">
+                <h4>Basisgegevens</h4>
+                <table>
+                    <tr><td><strong>Adres:</strong></td><td>{{ dossier.adres }}</td></tr>
+                    <tr><td><strong>Postcode:</strong></td><td>{{ dossier.postcode }}</td></tr>
+                    <tr><td><strong>Plaats:</strong></td><td>{{ dossier.plaats }}</td></tr>
+                    <tr><td><strong>Gebruiksdoel:</strong></td><td>{{ dossier.gebruiksdoel|default('-') }}</td></tr>
+                </table>
+            </div>
+            
+            <div class="info-box">
+                <h4>Technische gegevens</h4>
+                <table>
+                    <tr><td><strong>Bouwjaar:</strong></td><td>{{ dossier.bouwjaar|default('-') }}</td></tr>
+                    <tr><td><strong>Oppervlakte:</strong></td><td>{{ dossier.oppervlakte|default('-') }} m²</td></tr>
+                    <tr><td><strong>Inhoud:</strong></td><td>{{ dossier.inhoud|default('-') }} m³</td></tr>
+                    <tr><td><strong>Hoogte:</strong></td><td>{{ dossier.hoogte|default('-') }} m</td></tr>
+                    <tr><td><strong>Aantal bouwlagen:</strong></td><td>{{ dossier.aantal_bouwlagen|default('-') }}</td></tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- BAG GEGEVENS -->
+    {% if bag_data %}
+    <div class="section">
+        <h2>BAG Gegevens</h2>
+        
+        <div class="info-box">
+            <h4>Basisregistratie Adressen en Gebouwen</h4>
+            <table>
+                <tr><td><strong>BAG ID:</strong></td><td>{{ bag_data.verblijfsobject_id|default('-') }}</td></tr>
+                <tr><td><strong>Status:</strong></td><td>{{ bag_data.status|default('-') }}</td></tr>
+                <tr><td><strong>Oppervlakte BAG:</strong></td><td>{{ bag_data.oppervlakte|default('-') }} m²</td></tr>
+                <tr><td><strong>Bouwjaar BAG:</strong></td><td>{{ bag_data.bouwjaar|default('-') }}</td></tr>
+                <tr><td><strong>Gebruiksdoel BAG:</strong></td><td>{{ bag_data.gebruiksdoel|default('-') }}</td></tr>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- WAARDERINGSMETHODIEK -->
+    <div class="section">
+        <h2>Waarderingsmethodiek</h2>
+        
+        <div class="highlight-section">
+            <h4 style="color: #2c5aa0; margin-bottom: 15px;">Toegepaste methoden</h4>
+            <p style="margin-bottom: 15px;">Voor de waardering van dit commerciële vastgoed zijn de volgende methoden gehanteerd:</p>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin: 20px 0;">
+                <div style="text-align: center; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e9ecef;">
+                    <div style="color: #2c5aa0; font-size: 14pt; font-weight: 600; margin-bottom: 8px;">1</div>
+                    <div style="font-weight: 600; color: #495057; margin-bottom: 5px;">Vergelijkingsmethode</div>
+                    <div style="font-size: 9pt; color: #6c757d;">Analyse van vergelijkbare transacties</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e9ecef;">
+                    <div style="color: #2c5aa0; font-size: 14pt; font-weight: 600; margin-bottom: 8px;">2</div>
+                    <div style="font-weight: 600; color: #495057; margin-bottom: 5px;">Rentabiliteitswaarde</div>
+                    <div style="font-size: 9pt; color: #6c757d;">Kapitalisatie van netto huurinkomsten</div>
+                </div>
+                <div style="text-align: center; padding: 15px; background: white; border-radius: 8px; border: 1px solid #e9ecef;">
+                    <div style="color: #2c5aa0; font-size: 14pt; font-weight: 600; margin-bottom: 8px;">3</div>
+                    <div style="font-weight: 600; color: #495057; margin-bottom: 5px;">Kostprijsbenadering</div>
+                    <div style="font-size: 9pt; color: #6c757d;">Vervangingskosten minus veroudering</div>
+                </div>
+            </div>
+            
+            {% if taxatie %}
+            <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
+                <strong style="color: #2c5aa0;">Gehanteerde waarderingsgrondslag:</strong> 
+                {% if taxatie.prijs_per_m2 %}
+                <span class="value-highlight">Prijs per vierkante meter</span>
+                {% elif taxatie.prijs_per_m3 %}
+                <span class="value-highlight">Prijs per kubieke meter</span>
+                {% else %}
+                <span class="value-highlight">Marktwaarde op basis van integrale beoordeling</span>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- LOCATIE EN KAART -->
+    <div class="section">
+        <h2>Locatie</h2>
+        
+        {% if kaart_snapshot and kaart_snapshot.image_data %}
+        <div class="map-container" style="text-align: center; margin: 20px 0;">
+            <img src="data:image/png;base64,{{ kaart_snapshot.image_data }}" 
+                 alt="Kaart van {{ dossier.adres }}" 
+                 style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px;">
+            <p style="font-size: 9pt; color: #666; margin-top: 10px; text-align: center;">
+                <strong>Locatie:</strong> {{ kaart_snapshot.center_address }}<br>
+                <small>Coördinaten: {{ "%.6f"|format(kaart_snapshot.coordinates.lat) }}, {{ "%.6f"|format(kaart_snapshot.coordinates.lon) }} (WGS84) - Bron: {{ kaart_snapshot.source }}</small>
+            </p>
+        </div>
+        {% elif kaart_snapshot and kaart_snapshot.coordinates %}
+        <div class="location-info" style="background: #f8f9fa; padding: 15px; border-left: 4px solid #28a745; margin: 15px 0;">
+            <p style="margin: 0; font-weight: bold;">
+                <strong>Adres:</strong> {{ kaart_snapshot.center_address }}
+            </p>
+            <p style="margin: 5px 0; font-size: 10pt;">
+                <strong>Coördinaten:</strong> {{ "%.6f"|format(kaart_snapshot.coordinates.lat) }}, {{ "%.6f"|format(kaart_snapshot.coordinates.lon) }} (WGS84)
+            </p>
+            <p style="margin: 5px 0 0 0; font-size: 9pt; color: #666;">
+                Databron: {{ kaart_snapshot.source }} | Voor kaartweergave: <br>
+                OpenStreetMap: https://www.openstreetmap.org/#map=16/{{ kaart_snapshot.coordinates.lat }}/{{ kaart_snapshot.coordinates.lon }}
+            </p>
+        </div>
+        {% else %}
+        <div class="info-box" style="background: #f8f9fa; padding: 15px; border-left: 4px solid #6c757d; margin: 15px 0;">
+            <p style="margin: 0; color: #6c757d;">
+                <strong>Adres:</strong> {{ dossier.adres }}, {{ dossier.postcode }} {{ dossier.plaats }}
+            </p>
+            <p style="margin: 5px 0 0 0; font-size: 9pt; color: #6c757d;">
+                Locatie coördinaten niet beschikbaar
+            </p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- FOOTER -->
+    <div class="footer">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <div style="font-weight: 600; color: #2c5aa0;">Pandoorac Taxatiesysteem</div>
+            <div style="font-size: 9pt;">{{ generatie_datum.strftime('%d-%m-%Y om %H:%M') }}</div>
+        </div>
+        <p style="margin: 0; line-height: 1.4;">
+            Dit rapport is automatisch gegenereerd door Pandoorac op {{ generatie_datum.strftime('%d-%m-%Y om %H:%M') }}
+        </p>
+        <p style="font-size: 8pt; margin-top: 8px; line-height: 1.3; color: #6c757d;">
+            De in dit rapport vermelde gegevens zijn ontleend aan openbare bronnen en de ingevoerde taxatiegegevens. 
+            Aan de juistheid en volledigheid van deze gegevens kunnen geen rechten worden ontleend.
+            Voor commercieel vastgoed zijn marktomstandigheden en specifieke eigenschappen bepalend voor de waarde.
+        </p>
+    </div>
+</body>
+</html>
