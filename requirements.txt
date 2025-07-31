@@ -8,7 +8,7 @@ Werkzeug==2.0.1
 alembic==1.7.1
 SQLAlchemy==1.4.23
 boto3==1.34.69
-Pillow==10.2.0
+Pillow==10.3.0
 python-magic==0.4.27
 requests==2.31.0
 WTForms==3.0.1
